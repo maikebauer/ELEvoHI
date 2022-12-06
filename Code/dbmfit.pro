@@ -203,8 +203,8 @@ if runnumber eq 1 and keyword_set(nightly) eq 0 then begin
     plot, r_apex_sun[1:n_elements(r_apex_sun)-2], s[1:n_elements(r_apex_sun)-2], psym=1, symsize=1.2, yr=[0,yrmax], title='ElCon distance-speed profile', xtit='Heliocentric distance [Rsun]', ytit='Speed [km s!E-1!N]', charsize=1.5
     errplot, r_apex_sun[1:n_elements(r_apex_sun)-2], s[1:n_elements(r_apex_sun)-2]-speed_errlo[1:n_elements(r_apex_sun)-2], s[1:n_elements(r_apex_sun)-2]+speed_errhi[1:n_elements(r_apex_sun)-2]
 
-    oplot, [r_apex_sun[startcut],r_apex_sun[startcut]], [s[startcut],s[startcut]], psym=8, symsize=3
-    oplot, [r_apex_sun[endcut],r_apex_sun[endcut]], [s[endcut],s[endcut]], psym=8, symsize=3
+    oplot, [r_apex_sun[cut],r_apex_sun[cut]], [s[cut],s[cut]], psym=8, symsize=3
+    oplot, [r_apex_sun[ecut],r_apex_sun[ecut]], [s[ecut],s[ecut]], psym=8, symsize=3
 
     x2jpeg, dir+'/Dbmfit_cuts.jpg'
 endif
@@ -585,5 +585,4 @@ spEndCut = fitspeedall[index,n_elements(y)-1]
 
 startcut=cut
 endcut=ecut
-
 end

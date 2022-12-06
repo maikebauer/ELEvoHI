@@ -71,15 +71,17 @@ vexp=get_stereo_lonlat(suntime, 'Venus', system='HEE')
 soloAvailable = 0
 pspAvailable = 0
 bepiAvailable = 0
+
 if anytim(suntime) gt anytim('01-Mar-2020 00:00:00') then soloAvailable = 1
 if anytim(suntime) gt anytim('01-Jan-2019 00:00:00') then pspAvailable = 1
-if anytim(suntime) gt anytim('21-Oct_2018 00:00:00') and anytim(suntime) lt anytim('01-Nov-2025 00:00:00') then bepiAvailable = 1
+
+if (anytim(suntime) gt anytim('21-Oct-2018 00:00:00')) and (anytim(suntime) lt anytim('01-Nov-2025 00:00:00')) then bepiAvailable = 1
 if soloAvailable eq 1 then solop=get_stereo_lonlat(suntime, 'solo', system='HEE')
 if pspAvailable eq 1 then pspp=get_stereo_lonlat(suntime, 'psp', system='HEE')
 if bepiAvailable eq 1 then begin
-	krnl = concat_dir( getenv('STEREO_SPICE_OTHER'), 'bc_mpo_fcp_00094_20181020_20251101_v01.bsp')
-	cspice_furnsh, krnl
-	bepip = get_stereo_lonlat(suntime, '-121', system='HEE') 
+	;krnl = concat_dir( getenv('STEREO_SPICE_OTHER'), 'bc_mpo_fcp_00094_20181020_20251101_v01.bsp')
+	;cspice_furnsh, krnl
+	bepip = get_stereo_lonlat(suntime, 'BepiColombo-MPO', system='HEE')
 endif
 
 if anytim(suntime) gt anytim('2004-08-03T00:00:00') and anytim(suntime) lt anytim('2012-04-01T00:00:00') then begin
@@ -137,12 +139,12 @@ if direction gt vexp[1]/!dtor then delta_V=direction-vexp[1]/!dtor
 if direction lt mesp[1]/!dtor then delta_MES=abs(direction)+mesp[1]/!dtor
 if direction gt mesp[1]/!dtor then delta_MES=direction-mesp[1]/!dtor
 
-if soloAvailable eq 1 then begin 
+if soloAvailable eq 1 then begin
 	if direction lt solop[1]/!dtor then delta_SOLO=abs(direction)+solop[1]/!dtor
 	if direction gt solop[1]/!dtor then delta_SOLO=direction-solop[1]/!dtor
 endif
 
-if pspAvailable eq 1 then begin 
+if pspAvailable eq 1 then begin
 	if direction lt pspp[1]/!dtor then delta_PSP=abs(direction)+pspp[1]/!dtor
 	if direction gt pspp[1]/!dtor then delta_PSP=direction-pspp[1]/!dtor
 endif
@@ -274,11 +276,10 @@ endif
   pos_earth=get_stereo_lonlat(t_plot[0], 'Earth', system='HEE')
   pos_vex=get_stereo_lonlat(t_plot[0], 'Venus', system='HEE')
   pos_mars=get_stereo_lonlat(t_plot[0], 'Mars', system='HEE')
-  
+
   if soloAvailable eq 1 then pos_solo=get_stereo_lonlat(t_plot[0], 'solo', system='HEE')
   if pspAvailable eq 1 then pos_psp=get_stereo_lonlat(t_plot[0], 'psp', system='HEE')
-  if bepiAvailable eq 1 then pos_bepi=get_stereo_lonlat(t_plot[0], '-121', system='HEE')
-
+  if bepiAvailable eq 1 then pos_bepi=get_stereo_lonlat(t_plot[0], 'BepiColombo-MPO', system='HEE')
 
   pos_mes=fltarr(3)
 
@@ -512,7 +513,7 @@ for i=0,s[1]-1  do begin
       deltaspeed_PSP=dvalue/R_plot[i]*V_plot[i]
     endif
   endif
-  
+
   if bepiAvailable eq 1 then begin
     ;get distance and speed of point along delta of BEPI:
     dvalue=elevo_analytic(R_plot[i], aspectratio, halfwidth, delta_BEPI)
@@ -856,7 +857,7 @@ pred.PSP_speed=!Values.F_nan
 pred.BEPI_time=!Values.F_nan
 pred.BEPI_speed=!Values.F_nan
 
-if soloAvailable eq 1 then begin 
+if soloAvailable eq 1 then begin
   pred.SOLO_time = arrival_SOLO
   pred.SOLO_speed= arrival_speed_SOLO
 endif

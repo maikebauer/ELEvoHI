@@ -275,8 +275,12 @@ source=sourcestring[0]
 ;start and end of dbmfit
 if n_elements(sourcestring) eq 3 then begin
     startcut=sourcestring[1]
-    endcut_original=sourcestring[2]
-endif
+    endcut=sourcestring[2]
+endif else begin
+    startcut=[]
+    endcut=[]
+endelse
+
 
 insitu=str[24]
 if str[27] ne '' and str[29] eq '' then arr=[[str[27], strmid(str[28], 0, 17)]]
@@ -293,6 +297,12 @@ journal, path+'logfile.log'
 
 case source of
     'helcats': begin
+
+        if (sc ne 'A') or (sc ne 'B') then begin
+            print, 'Invalid spacecraft, choose either A or B.'
+            exit
+        endif
+
         print, 'Source file from HELCATS'
         read_hi, eventdate, sc, time, elon, elon_err, filen, /save_file, /silent
         restore, filen, /verb
@@ -314,7 +324,15 @@ case source of
     else: print, 'Define HI input file!'
 endcase
 
-res=stereo_rsun(time[0],sc,distance=distance)
+if sc eq 'A' or sc eq 'B' then begin
+    res=stereo_rsun(time[0],sc,distance=distance)
+endif
+
+
+if sc eq 'Solar_Orbiter' then begin
+    res=solo_rsun(time[0],sc,distance=distance)
+endif
+
 d=distance[0]/au ; Sun-s/c distance in AU
 
 if bgsw eq 'insitu' then begin
@@ -481,18 +499,18 @@ if strupcase(bgsw) eq 'HUX' then begin
     event = strmid(dir, strpos(dir, '/', /reverse_search)-10, 11)
     bgsw_file = data + 'bgsw_WSA/' + event + 'vmap.txt'
     sc = strmid(event, 9, 1)
-    
+
     load_bgsw_hux, bgsw_file, bgswData=bgswData, bgswTime=bgswTime
     bgsw_data = bgswData
     bgswStartTime = bgswTime
     bgswTimeNum = anytim(bgswTime)
-    
+
     ;    bgsw_data = congrid(bgswdata, (size(bgswData))[1]*2, (size(bgswData))[2], /interp)
         ; interpolate the ambient solar wind data: longitude resolution 0.5° radial resoulution 0.5 R_sun
     ;    bgsw_data = congrid(bgswdata, (size(bgswData))[1]*4, (size(bgswData))[2]*2, /interp)
 
     print, 'Size bgsw data: ', size(bgsw_data)
-    
+
     save, bgsw_data, bgswStartTime, filename = resdir + 'bgsw_Data.sav'
 endif
 
@@ -506,7 +524,7 @@ endif
 if strupcase(bgsw) eq 'EUHFORIA' then begin
     event = strmid(dir, strpos(dir, '/', /reverse_search)-10, 8)
     bgswfile = data + 'bgsw_EUHFORIA/' + event + '.h5'
-    
+
     bgswData = load_bgsw_euhforia(bgswfile)
     save, bgswdata, filename = resdir + 'bgswData_EUHFORIA.sav'
 endif
@@ -559,7 +577,7 @@ for k=0, n_phi-1 do begin
             elon_err=fltarr(n_elements(elon))
 
             ;produce elongation measurement errors with values err_HI1=+/-0.1 deg, err_HI2=+/-0.4 deg (see Rollett et al. 2013)
-
+            ;must add error for Solar Orbiter
             for i=0, n_elements(elon)-1 do begin
                 if elon[i] lt 24. then elon_err[i]=0.1 else elon_err[i]=0.4
             endfor
@@ -586,17 +604,18 @@ for k=0, n_phi-1 do begin
             save, time, r_ell, r_err, phi, lambda, f, filename=dir+'elcon_results.sav'
 
             ;next step is fitting the time-distance profile using the DBM
-            endcut = endcut_original
-            
-            ec = endCut
+            ;endcut = endcut_original
+
+            ;;ec = endCut ; endCut is undefined?
             ;ec = (fix(startcut) + fix(endcut))/2
 
             print, 'SC: ', startcut
-            print, 'EC: ', endCut
-            print, 'EC: ', ec
-            endcut = ec
+            print, 'EC: ', endcut
+            ;;print, 'EC: ', endCut
+            ;;print, 'EC: ', ec
+            ;;endcut = ec
 
-            dbmfit, time, r_ell, r_err, sw, dir, runnumber, tinit, rinit, vinit, swspeed, drag_parameter, fitend, lambda, phi, startcut=startcut, endcut=ec, silent=silent, nightly=nightly, bgsw, bgswData = bgswData, spEndCut=spEndCut
+            dbmfit, time, r_ell, r_err, sw, dir, runnumber, tinit, rinit, vinit, swspeed, drag_parameter, fitend, lambda, phi, startcut=startcut, endcut=endcut, silent=silent, nightly=nightly, bgsw, bgswData = bgswData, spEndCut=spEndCut
 
             if keyword_set(deformableFront) then begin
               	if strupcase(bgsw) ne 'HUX' and strupcase(bgsw) ne 'HUXT' and strupcase(bgsw) ne 'EUHFORIA' then begin
@@ -604,7 +623,7 @@ for k=0, n_phi-1 do begin
                     print, 'set bgsw="HUX" or "HUXt" or "EUHFORIA"'
                     stop
               	endif
-              	
+
               	if finite(tinit) ne 0 and tinit ne 0 then begin
                     if kappa eq -1 then begin
                         print, 'Latitudinal extent of the CME not defined!!!'
