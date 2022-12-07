@@ -82,6 +82,8 @@ phi_min = 200
 phi_max = 0
 lam_max = 0
 eventTime = '0'
+hits = 0
+misses = 0
 
 set_plot, 'x'
 
@@ -327,7 +329,6 @@ endcase
 if sc eq 'A' or sc eq 'B' then begin
     res=stereo_rsun(time[0],sc,distance=distance)
 endif
-
 
 if sc eq 'Solar_Orbiter' then begin
     res=solo_rsun(time[0],sc,distance=distance)
@@ -779,6 +780,8 @@ for k=0, n_phi-1 do begin
               save_elevohi_e, fnam, dir, pred, dt_all
             endif
 
+            if finite(da_earth) then hits=hits+1 else misses=misses+1
+
             if lambda eq lambdaend then break
 
         endfor
@@ -831,7 +834,35 @@ if keyword_set(statistics) and ensemble eq 1 then begin
 endif
 
 
-if ensemble ne 1 then print, 'No estimation of uncertainty in single run mode!'
+if ensemble ne 1 then begin
+    print, 'No estimation of uncertainty in single run mode!'
+ endif else begin
+    ;Probability of arrival:
+    likely = hits/((hits+misses)*0.01)
+
+    print, 'Number of hits: ', hits
+    print, 'Number of misses: ', misses
+    print, 'Likelihood of arrival: ', string(round(likely))+' %'
+
+    ;speed prediction:
+    restore, dir+'eELEvoHI_results.sav'
+    nonans=where(eelevohi.arrspeed_earth gt 0.)
+    arrival_speed_mean = round(mean(eelevohi.arrspeed_earth(nonans)))
+    arrival_speed_std = round(stddev(eelevohi.arrspeed_earth(nonans)))
+
+    print, 'predicted arrival speed: ', strtrim(string(arrival_speed_mean), 2), ' +/- ', strtrim(string(arrival_speed_std), 2), ' km/s'
+
+    ;ambient wind speed
+    print, 'background solar wind speed: ', strtrim(string(round(mean(eelevohi.bg_sw_speed))), 2), ' +/-', strtrim(string(round(stddev(eelevohi.bg_sw_speed))), 2), ' km/s'
+
+    ;gamma
+    print, 'gamma: ', strtrim(string(mean(eelevohi.gamma)), 2), ' +/- ', stddev(eelevohi.gamma), ' /km'
+
+    ;elongation used for fitting
+    print, 'Elongation range used: ', mean(eelevohi.elongation_min), '-', mean(eelevohi.elongation_max)
+
+    print, 'realtime = ', realtime
+endelse
 
 journal
 
