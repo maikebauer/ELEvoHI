@@ -63,7 +63,7 @@
 ;		  Please add in the acknowledgements section of your article, where the ELEvoHI package can be obtained (figshare doi, github-link).
 ;         We are happy if you could send a copy of the article to tanja.amerstorfer@oeaw.ac.at.
 ; -
-PRO elevohi, save_results=save_results, statistics=statistics, silent=silent, nightly=nightly, forMovie=forMovie, realtime=realtime, bgsw=bgsw, deformableFront=deformableFront
+PRO elevohi, save_results=save_results, statistics=statistics, silent=silent, nightly=nightly, forMovie=forMovie, realtime=realtime, bgsw=bgsw, deformableFront=deformableFront, bflag=bflag
 
 
 if ~keyword_set(bgsw) then bgsw = 'stat'
@@ -116,6 +116,9 @@ endelse
 
 eventdate=evstr[0]
 eventdateSC = eventdate+'_'+sc
+
+if KEYWORD_SET(bflag) then eventdateSC = eventdate+'_'+sc+'_'+bflag
+
 
 ;produce name for event directory
 dir=path+'PredictedEvents/'+eventdateSC+'/'
@@ -310,7 +313,7 @@ case source of
         restore, filen, /verb
 
         track = {track_date: time, elon: elon, elon_std: elon_err, sc: sc}
-        save, track, filename = dir+eventdateSC+'_ccsds.sav'
+        save, track, filename = dir+'*_ccsds.sav'
         end
     'user-defined': begin
         print, 'User-defined HI input file'
@@ -321,7 +324,7 @@ case source of
         ;sc=track.sc
 
         track.track_date = anytim(track.track_date, /ccsds)
-        save, track, filename = dir+eventdateSC+'_ccsds.sav'
+        save, track, filename = dir+'*_ccsds.sav'
         end
     else: print, 'Define HI input file!'
 endcase

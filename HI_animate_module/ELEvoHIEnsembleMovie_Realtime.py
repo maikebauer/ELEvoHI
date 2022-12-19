@@ -11,8 +11,48 @@ import seaborn as sns
 import shutil
 import datetime
 from astropy.time import Time
+from sunpy.coordinates import frames, get_horizons_coord
+from sunpy.time import parse_time
+import logging
+import glob
+import time
+from numba import jit
+import numba
+import time
 
+logging.getLogger().setLevel(logging.CRITICAL)
 # ###################################################### functions
+
+#for getting sc HEE coordinates
+def get_hee_coordinates(sc, frametime):
+
+    coord_hee_list = []
+
+    try:
+        coord = get_horizons_coord(sc, frametime)
+        coord_hee = coord.transform_to(frames.HeliocentricEarthEcliptic)
+
+        for i in range(len(frametime)):
+            coord_hee_list.append({'lon':coord_hee[i].lon.value*np.pi/180, 'lat':coord_hee[i].lat.value*np.pi/180, 'distance':coord_hee[i].distance.value})
+
+    except ValueError:
+        coord_hee_list.append({'lon':[], 'lat':[], 'distance':[]})
+
+    return coord_hee_list
+
+#for getting start and aend time of movie
+def get_start_end_time(frame_time_num, duration_days, dayjump):
+
+    frame_time_str = []
+
+    for k in np.arange(0, duration_days, dayjump):
+
+    # to current frame time, the days need to be added, so +k is done
+    # save frame time as string to write on plot
+
+        frame_time_str.append(str(mdates.num2date(frame_time_num + k)).split('+')[0])
+
+    return frame_time_str[0], frame_time_str[-1]
 
 # for reading catalogues
 def getcat(filename):
@@ -29,9 +69,21 @@ def decode_array(bytearrin):
     for i in range(0, len(bytearrin) - 1):
         bytearrout[i] = bytearrin[i].decode()
     # has to be np array so to be used with numpy "where"
+    #bytearrout = [bytearrin[i].decode() for i in range(0, len(bytearrin) - 1)]
     bytearrout = np.array(bytearrout)
+
     return bytearrout
 
+
+def get_time_num(time_str, year, len_time):
+
+    time_num = np.zeros(np.size(len_time))
+
+    for i in range(len_time):
+        if year[i] < 2100:
+            time_num[i] = mdates.date2num(Time.strptime(time_str[i], '%Y-%m-%dT%H:%M:%S').datetime)
+
+    return time_num
 
 def time_to_num_cat(time_in):
     # for time conversion from catalogue .sav to numerical time
@@ -42,13 +94,12 @@ def time_to_num_cat(time_in):
     # http://docs.sunpy.org/en/latest/guide/time.html
     # http://matplotlib.org/examples/pylab_examples/date_demo2.html
 
-    j = 0
     # time_str=np.empty(np.size(time_in),dtype='S19')
     time_str = ['' for x in range(len(time_in))]
     # =np.chararray(np.size(time_in),itemsize=19)
     time_num = np.zeros(np.size(time_in))
 
-    for i in time_in:
+    for j in range(len(time_in)):
         # convert from bytes (output of scipy.readsav) to string
         time_str[j] = time_in[j][0:16].decode() + ':00'
         year = int(time_str[j][0:4])
@@ -58,7 +109,6 @@ def time_to_num_cat(time_in):
         # pdb.set_trace()
         if year < 2100:
             time_num[j] = mdates.date2num(Time.strptime(time_str[j], '%Y-%m-%dT%H:%M:%S').datetime)
-        j = j + 1
 
     # the date format in matplotlib is e.g. 735202.67569444
     # this is time in days since 0001-01-01 UTC, plus 1.
@@ -83,7 +133,7 @@ def roundTime(dt=None, roundTo=60):
 def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                  all_apex_r, all_apex_lon, all_apex_s, all_apex_flag,
                  frame_time_num, et_time_num_interp, et_elon_interp,
-                 et_time_num, startcutFit, endcutFit):
+                 et_time_num, startcutFit, endcutFit, constraint):
     # Plot all the different ellipses (different runs for each time step) with
     # the elongation profile
 
@@ -153,35 +203,80 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
             rell = np.sqrt(xell ** 2 + yell ** 2)
             longell = np.arctan2(yell, xell)
 
+            #change color here
             # plot in correct color
-            if all_apex_s[cmeind[0][p]] == 'A':
-                # make alpha dependent on distance to solar equatorial plane
-                # ax.plot(longell,rell, c='grey', alpha=1-abs(all_apex_lat[
-                # cmeind[0][p]]/50),
-                # lw=1.5)
-                ax.plot(longell, rell, c='red', alpha=0.02, lw=1.5)
-            if all_apex_s[cmeind[0][p]] == 'B':
-                # ax.plot(longell,rell, c='royalblue', alpha=1-abs(
-                # all_apex_lat[cmeind[0][p]]/50), lw=1.5)
 
-                # alpha should depend on colorflag
-                if all_apex_flag[cmeind[0][p]] == 0:
-                    # ax.plot(longell,rell, c='grey', alpha=0.6, lw=1,zorder=1)
-                    ax.plot(
-                        longell, rell, c='silver', alpha=0.6, lw=1, zorder=1)
-                    # if all_apex_flag[cmeind[0][p]] ==1:
-                    # ax.plot(longell,rell, c='silver', alpha=0.8,
-                    # lw=1,zorder=2)
+            if p in constraint:
+                constraint_bool = True
 
-                if all_apex_flag[cmeind[0][p]] == 1:
-                    # ax.plot(longell,rell, c='silver', alpha=0.6, lw=1,
-                    # zorder=1)
-                    ax.plot(
-                        longell, rell, c='blue', alpha=0.02, lw=1, zorder=1)
+            else:
+                constraint_bool = False
+            
+            if len(constraint) == 0:
+                constraint_bool = True
+                
+            if constraint_bool:
 
-                if all_apex_flag[cmeind[0][p]] == 2:
-                    ax.plot(
-                        longell, rell, c='black', alpha=1, lw=1, zorder=3)
+                if all_apex_s[cmeind[0][p]] == 'A':
+                    # make alpha dependent on distance to solar equatorial plane
+                    # ax.plot(longell,rell, c='grey', alpha=1-abs(all_apex_lat[
+                    # cmeind[0][p]]/50),
+                    # lw=1.5)
+                    ax.plot(longell, rell, c='red', alpha=0.1, lw=1.5)
+
+                if all_apex_s[cmeind[0][p]] == 'B':
+                    # ax.plot(longell,rell, c='royalblue', alpha=1-abs(
+                    # all_apex_lat[cmeind[0][p]]/50), lw=1.5)
+
+                    # alpha should depend on colorflag
+                    if all_apex_flag[cmeind[0][p]] == 0:
+                        # ax.plot(longell,rell, c='grey', alpha=0.6, lw=1,zorder=1)
+                        ax.plot(
+                            longell, rell, c='silver', alpha=0.6, lw=1, zorder=1)
+                        # if all_apex_flag[cmeind[0][p]] ==1:
+                        # ax.plot(longell,rell, c='silver', alpha=0.8,
+                        # lw=1,zorder=2)
+
+                    if all_apex_flag[cmeind[0][p]] == 1:
+                        # ax.plot(longell,rell, c='silver', alpha=0.6, lw=1,
+                        # zorder=1)
+                        ax.plot(
+                            longell, rell, c='blue', alpha=0.1, lw=1, zorder=1)
+
+                    if all_apex_flag[cmeind[0][p]] == 2:
+                        ax.plot(
+                            longell, rell, c='black', alpha=1, lw=1, zorder=3)
+            else:
+
+                if all_apex_s[cmeind[0][p]] == 'A':
+                    # make alpha dependent on distance to solar equatorial plane
+                    # ax.plot(longell,rell, c='grey', alpha=1-abs(all_apex_lat[
+                    # cmeind[0][p]]/50),
+                    # lw=1.5)
+                    ax.plot(longell, rell, c='gray', alpha=0.1, lw=1.5)
+
+                if all_apex_s[cmeind[0][p]] == 'B':
+                    # ax.plot(longell,rell, c='royalblue', alpha=1-abs(
+                    # all_apex_lat[cmeind[0][p]]/50), lw=1.5)
+
+                    # alpha should depend on colorflag
+                    if all_apex_flag[cmeind[0][p]] == 0:
+                        # ax.plot(longell,rell, c='grey', alpha=0.6, lw=1,zorder=1)
+                        ax.plot(
+                            longell, rell, c='gray', alpha=0.6, lw=1, zorder=1)
+                        # if all_apex_flag[cmeind[0][p]] ==1:
+                        # ax.plot(longell,rell, c='silver', alpha=0.8,
+                        # lw=1,zorder=2)
+
+                    if all_apex_flag[cmeind[0][p]] == 1:
+                        # ax.plot(longell,rell, c='silver', alpha=0.6, lw=1,
+                        # zorder=1)
+                        ax.plot(
+                            longell, rell, c='gray', alpha=0.1, lw=1, zorder=1)
+
+                    if all_apex_flag[cmeind[0][p]] == 2:
+                        ax.plot(
+                            longell, rell, c='gray', alpha=1, lw=1, zorder=3)
 
     # ##############################plot elongation
         # difference array of current frame time frame_time_num+k to
@@ -249,11 +344,13 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                 elonlong = np.arctan2(elony1, elonx1)
 
                 if (frame_time_num + k > et_time_num[startcutFit] and
-                        frame_time_num + k < et_time_num[endcutFit]):
+                    frame_time_num + k < et_time_num[endcutFit]):
+
                     ax.plot(
                         [pos.sta[1, timeind], elonlong],
                         [pos.sta[0, timeind], elonr], c='darkred',
                         alpha=1, lw=1)
+
                 else:
                     ax.plot(
                         [pos.sta[1, timeind], elonlong],
@@ -274,14 +371,22 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
     # ############ read file with ensemble results, dump as pickle to use later
     if read_data == 1:
 
+        #tic = time.perf_counter()
         h = getcat(current_event_dir + ensemble_results)
+        #toc = time.perf_counter()
+        #print(f"Downloaded the tutorial in {toc - tic:0.4f} seconds")
+
+        #tic = time.perf_counter()
         all_apex_t = h.elevo_kin.all_apex_t[0]
         startcutFit = int(h.startcut)
         endcutFit = int(h.endcut)
         [all_apex_t_num_non_interp,
             all_apex_t_num_non_interp_str] = time_to_num_cat(all_apex_t)
         # get all parameters
+        #toc = time.perf_counter()
+        #print(f"Downloaded the tutorial in {toc - tic:0.4f} seconds")
 
+        #tic = time.perf_counter()
         all_apex_r_non_interp = h.elevo_kin.all_apex_r[0]
         all_apex_lat_non_interp = h.elevo_kin.all_apex_lat[0]  # degree
         all_apex_lon_non_interp = h.elevo_kin.all_apex_lon[0]  # degree
@@ -289,7 +394,10 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
         all_apex_f_non_interp = h.elevo_kin.all_apex_f[0]
         # width
         all_apex_w_non_interp = np.deg2rad(h.elevo_kin.all_apex_w[0])
+        #toc = time.perf_counter()
+        #print(f"Downloaded the tutorial in {toc - tic:0.4f} seconds")
 
+        #tic = time.perf_counter()
         # constants
         all_apex_s_non_interp = decode_array(h.elevo_kin.all_apex_s[0])
         all_apex_run_non_interp = h.elevo_kin.runnumber[0]
@@ -314,7 +422,10 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
         # final array size -> time array of CME frames * run numbers
         finarrs = np.size(h_time_num) * np.size(
             np.unique(all_apex_run_non_interp))
+        #toc = time.perf_counter()
+        #print(f"Downloaded the tutorial in {toc - tic:0.4f} seconds")
 
+        #tic = time.perf_counter()
         eventsize = np.size(h_time_num)
 
         # initialise arrays
@@ -327,6 +438,9 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
         all_apex_s = [''] * finarrs
         all_apex_run = np.zeros(finarrs)
         all_apex_flag = np.zeros(finarrs)
+
+        #toc = time.perf_counter()
+        #print(f"Downloaded the tutorial in {toc - tic:0.4f} seconds")
 
         print('start interpolation')
     #    for q in np.arange(0, np.max(all_apex_run_non_interp)):
@@ -424,7 +538,7 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
     #
     #
     # get elongation-time profile from track
-    et = getcat(current_event_dir + tracksav)
+    et = getcat(tracksav)
     et_time = et.track.track_date[0]
     et_time_num = time_to_num_cat(et_time)[0]
     et_elon = et.track['elon'][0]
@@ -473,7 +587,7 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
 
 def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
          catPath=None, scriptPath=None, outPath=None, plotBGSW=None,
-         showMag=None, ffmpegPath=None):
+         showMag=None, ffmpegPath=None, bflag=None):
 
     if catPath is None:
         catPath = 'cats/'
@@ -498,11 +612,9 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
     rotSun = 27.27  # days
     startBGSW = 5  # Start of the background solar wind from HUX model
 
-    # eventsList = ['20090623']
     for l in range(0, np.size(eventsList)):
         startTime = datetime.datetime.now()
         current_event = eventsList[l]
-        # current_event = '20100408'
 
         # IDL sav file with ensemble simulation results
         ensemble_results = 'ForMovie/formovie_all_flag.sav'
@@ -546,23 +658,11 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
         if HEE == 1:
             coordSysString = 'HEE'
 
-        # save file with elongation tracks
-        # tracksav='track_B_img_ccsds.sav'
-        # tracksav='satplot_track_ccsds.sav'
-        # tracksav = current_event + '_ccsds.sav'
-
         ##########################################
 
         plt.close('all')
 
-        # current_event_dir = 'events/PropDirFromElon/' + current_event
         current_event_dir = scriptPath + current_event
-
-#        if not os.path.isdir(current_event_dir):
-#            os.mkdir(current_event_dir)
-
-#        if not os.path.isdir(current_event_dir + '/frames'):
-#            os.mkdir(current_event_dir + '/frames')
 
         print()
         print('Start ELEvoHI animation program.')
@@ -620,32 +720,50 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
         pos = getcat(catPath + 'positions_2007_2023_' + coordSysString +
                      '_6hours.sav')
         pos_time_num = time_to_num_cat(pos.time)[0]
-        # positions are available as pos.mercury etc.
-
-#        pos_new = getcat(catPath + 'positions_vr_' + coordSysString + '.p')
-        [psp, bepi, solo, sta, earth, venus, mars, mercury,frame]=pickle.load( open( catPath + 'positions_vr_' + coordSysString + '.p', "rb" ) )
 
         if spacecraft == 'AB' or spacecraft == 'A':
+
+            if bflag != None:
+                current_event_dir_mod = current_event_dir + '_A_' + bflag + '/'
+
+            else:
+                current_event_dir_mod = current_event_dir + '_A/'
+
+            ccsds_dir = glob.glob(current_event_dir_mod+'*ccsds*.sav')[0]
+
             [CME_start_time_a, duration_days_a, startcutFit_a, endcutFit_a,
              all_apex_t_a, all_apex_r_a, all_apex_lat_a, all_apex_lon_a,
              all_apex_f_a, all_apex_w_a, all_apex_s_a, all_apex_run_a,
              all_apex_flag_a, et_time_num_a, et_time_num_interp_a,
              et_elon_interp_a] = read_CME_data(
-                read_data, dayjump, current_event_dir + '_A/',
+                read_data, dayjump, current_event_dir_mod,
                 ensemble_results, duration_days, cme_start_date_time,
-                current_event + '_A_ccsds.sav')
+                ccsds_dir)
 
         if spacecraft == 'AB' or spacecraft == 'B':
+
+            if bflag != None:
+                current_event_dir_mod = current_event_dir + '_B_' + bflag + '/'
+
+            else:
+                current_event_dir_mod = current_event_dir + '_B/'
+
+            ccsds_dir = glob.glob(current_event_dir_mod+'*ccsds*.sav')[0]
+
             [CME_start_time_b, duration_days_b, startcutFit_b, endcutFit_b,
              all_apex_t_b, all_apex_r_b, all_apex_lat_b, all_apex_lon_b,
              all_apex_f_b, all_apex_w_b, all_apex_s_b, all_apex_run_b,
              all_apex_flag_b, et_time_num_b, et_time_num_interp_b,
              et_elon_interp_b] = read_CME_data(
-                read_data, dayjump, current_event_dir + '_B/',
+                read_data, dayjump, current_event_dir_mod,
                 ensemble_results, duration_days, cme_start_date_time,
-                current_event + '_B_ccsds.sav')
+                ccsds_dir)
 
-        current_event_dir = current_event_dir + '_' + spacecraft + '/'
+        if spacecraft == 'AB':
+            current_event_dir_mod = current_event_dir + '_AB_' + bflag + '/'
+
+        current_event_dir = current_event_dir_mod
+
         if not os.path.isdir(current_event_dir):
             os.mkdir(current_event_dir)
         if not os.path.isdir(current_event_dir + 'frames'):
@@ -680,15 +798,60 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                 movie_start_date_time, '%Y-%b-%d %H:%M:%S').datetime)
             print(frame_time_num)
 
+        time_start, time_end = get_start_end_time(frame_time_num, duration_days, dayjump)
+        frame_time_dict = {'start': time_start, 'stop': time_end, 'step':'1h'}
+
+        psp_coord_hee = get_hee_coordinates('psp', frame_time_dict)
+
+        bepi_coord_hee = get_hee_coordinates('bepicolombo', frame_time_dict)
+
+        solo_coord_hee = get_hee_coordinates('solo', frame_time_dict)
+
+        stereoa_coord_hee = get_hee_coordinates('stereo-a', frame_time_dict)
+
+        stereob_coord_hee = get_hee_coordinates('stereo-b', frame_time_dict)
+
+        earth_coord_hee = get_hee_coordinates('399', frame_time_dict) #Earth
+
+        venus_coord_hee = get_hee_coordinates('299', frame_time_dict) #Venus
+
+        mars_coord_hee = get_hee_coordinates('499', frame_time_dict) #Mars
+
+        mercury_coord_hee = get_hee_coordinates('199', frame_time_dict) #Mercury
+
         # ##### loop over all movie frames
         for k in np.arange(0, duration_days, dayjump):
+
+            #i = int(np.round(k * 1.0 / dayjump))
+            i = 0
             # to current frame time, the days need to be added, so +k is done
             # save frame time as string to write on plot
 
             framestr = '%04i' % np.round(k * 1.0 / dayjump)
             frame_time_str = str(mdates.num2date(frame_time_num + k))
 
+            obstime = parse_time(frame_time_str.split('+')[0])
+
+            psp_coord = psp_coord_hee[int(i)]
+
+            bepi_coord = bepi_coord_hee[int(i)]
+
+            solo_coord = solo_coord_hee[int(i)]
+
+            stereoa_coord = stereoa_coord_hee[int(i)]
+
+            stereob_coord = stereob_coord_hee[int(i)]
+
+            earth_coord = earth_coord_hee[int(i)]
+
+            venus_coord = venus_coord_hee[int(i)]
+
+            mars_coord = mars_coord_hee[int(i)]
+
+            mercury_coord = mercury_coord_hee[int(i)]
+
             print('frame ', framestr, '  ', frame_time_str)
+
             if spacecraft == 'AB' or spacecraft == 'A':
                 # difference array of current frame time frame_time_num+k to
                 # position time frame_time_num
@@ -734,6 +897,12 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
             # get index of closest to 0, use this for position
             timeind = np.argmin(abs(dct))
 
+            try:
+                constraint = np.loadtxt(current_event_dir + 'best_indices.csv', delimiter=',')
+
+            except OSError:
+                constraint = []
+
             if spacecraft == 'AB' or spacecraft == 'A':
                 [slope_a, intercept_a] = plot_ellipse(ax, dayjump, pos, timeind,
                                                       cmeind_a, k, all_apex_f_a,
@@ -742,7 +911,8 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                                                       all_apex_flag_a, frame_time_num,
                                                       et_time_num_interp_a,
                                                       et_elon_interp_a, et_time_num_a,
-                                                      startcutFit_a, endcutFit_a)
+                                                      startcutFit_a, endcutFit_a, constraint)
+
             if spacecraft == 'AB' or spacecraft == 'B':
                 [slope_b, intercept_b] = plot_ellipse(ax, dayjump, pos, timeind,
                                                       cmeind_b, k, all_apex_f_b,
@@ -751,7 +921,7 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                                                       all_apex_flag_b, frame_time_num,
                                                       et_time_num_interp_b,
                                                       et_elon_interp_b, et_time_num_b,
-                                                      startcutFit_b, endcutFit_b)
+                                                      startcutFit_b, endcutFit_b, constraint)
 
             if spacecraft == 'AB':
                 if (np.isfinite(slope_a) and np.isfinite(slope_b) and
@@ -771,43 +941,41 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
 
                     # ax.plot([0, elonlong], [0, elonr], c='green', alpha=1, lw=1)
 
-            # difference array of current frame time frame_time_num+k to
-            # position time frame_time_num
-            # get index of closest to 0, use this for position
-            minEarth = np.argmin(abs(frame_time_num + k - earth.time))
-
-            # index 1 is longitude, 0 is rdist
             ax.scatter(
-                venus.lon[minEarth], venus.r[minEarth],
+                venus_coord['lon'], venus_coord['distance'],
                 s=50, c='orange', alpha=1, lw=0, zorder=3)
+
             ax.scatter(
-                mercury.lon[minEarth], mercury.r[minEarth],
+                mercury_coord['lon'], mercury_coord['distance'],
                 s=50, c='dimgrey', alpha=1, lw=0, zorder=3)
+
             ax.scatter(
-                sta.lon[minEarth], sta.r[minEarth],
+                stereoa_coord['lon'], stereoa_coord['distance'],
                 s=25, c='red', alpha=1, marker='s', lw=0, zorder=3)
+
             ax.scatter(
-                earth.lon[minEarth], earth.r[minEarth],
+                stereob_coord['lon'], stereob_coord['distance'],
+                s=25, c='blue', alpha=1, marker='s', lw=0, zorder=3)
+
+            ax.scatter(
+                earth_coord['lon'], earth_coord['distance'],
                 s=50, c='mediumseagreen', alpha=1, lw=0, zorder=3)
+
             ax.scatter(
-                mars.lon[minEarth], mars.r[minEarth],
+                mars_coord['lon'], mars_coord['distance'],
                 s=50, c='orangered', alpha=1, lw=0, zorder=3)
 
-            minSolo = np.argmin(abs(frame_time_num + k - solo.time))
-            if minSolo > 0:
-                ax.scatter(
-                    solo.lon[minSolo], solo.r[minSolo],
-                    s=25, c='green', alpha=1, marker='s', lw=0, zorder=3)
-            minPSP = np.argmin(abs(frame_time_num + k - psp.time))
-            if minPSP > 0:
-                ax.scatter(
-                    psp.lon[minPSP], psp.r[minPSP],
-                    s=25, c='black', alpha=1, marker='s', lw=0, zorder=3)
-            minBepi = np.argmin(abs(frame_time_num + k - bepi.time))
-            if minBepi > 0:
-                ax.scatter(
-                    bepi.lon[minBepi], bepi.r[minBepi],
-                    s=25, c='blue', alpha=1, marker='s', lw=0, zorder=3)
+            ax.scatter(
+                solo_coord['lon'], solo_coord['distance'],
+                s=25, c='green', alpha=1, marker='s', lw=0, zorder=3)
+
+            ax.scatter(
+                psp_coord['lon'], psp_coord['distance'],
+                s=25, c='black', alpha=1, marker='s', lw=0, zorder=3)
+
+            ax.scatter(
+                bepi_coord['lon'], bepi_coord['distance'],
+                s=25, c='mediumvioletred', alpha=1, marker='s', lw=0, zorder=3)
 
             # ######################  plot ICME detections
             # ####### for each frame time, check active ICMEs looking into ICMECAT:
@@ -885,16 +1053,17 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                         ha='center', fontsize=labelfontsize)
             plt.figtext(0.25 - 0.02, 0.02, 'STEREO-A', color='red',
                         ha='center', fontsize=labelfontsize)
-            plt.figtext(0.33 - 0.02, 0.02, 'Earth', color='mediumseagreen',
+            plt.figtext(0.33 - 0.02, 0.02, 'STEREO-B', color='blue',
                         ha='center', fontsize=labelfontsize)
-            plt.figtext(0.39 - 0.02, 0.02, 'Mars', color='orangered',
+            plt.figtext(0.41 - 0.02, 0.02, 'Earth', color='mediumseagreen',
                         ha='center', fontsize=labelfontsize)
-            plt.figtext(0.44 - 0.02, 0.02, 'PSP', color='black',
+            plt.figtext(0.47 - 0.02, 0.02, 'Mars', color='orangered',
                         ha='center', fontsize=labelfontsize)
-            plt.figtext(0.51 - 0.02, 0.02, 'BepiColombo', color='blue',
+            plt.figtext(0.52 - 0.02, 0.02, 'PSP', color='black',
                         ha='center', fontsize=labelfontsize)
-            if minSolo > 0:
-                plt.figtext(0.59 - 0.02, 0.02, 'SolO', color='green',
+            plt.figtext(0.59 - 0.02, 0.02, 'BepiColombo', color='mediumvioletred',
+                        ha='center', fontsize=labelfontsize)
+            plt.figtext(0.67 - 0.02, 0.02, 'SolO', color='green',
                             ha='center', fontsize=labelfontsize)
 
             if showMag:
@@ -967,7 +1136,7 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                 dpi=300)
             # clears plot window
             plt.clf()
-
+            i = i+1
         # ########### end of loop
 
         if outPath is None:
@@ -978,7 +1147,7 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
 
         outpath = outpath + '/'
 
-    
+
         os.system(ffmpegPath + 'ffmpeg -r 20 -i "' + current_event_dir +
                   'frames/elevohi_%04d.png" -c:v libx264 -vf "fps=25,format=yuv420p" ' + outpath +
                   current_event + '_' + spacecraft +
@@ -992,11 +1161,11 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
 
 if __name__ == '__main__':
 
-    eventslist = ['20100203', '20100319', '20100403', '20100408',
-                  '20100523', '20101026', '20110130', '20110214',
-                  '20110906', '20120123', '20120614', '20120712']
+    # eventslist = ['20100203', '20100319', '20100403', '20100408',
+    #               '20100523', '20101026', '20110130', '20110214',
+    #               '20110906', '20120123', '20120614', '20120712']
     # eventslist = ['20110906', '20120123', '20120614', '20120712']
-    eventslist = ['20200106']
+    # eventslist = ['20200106']
 
     main(eventslist, spaceCraft='A', scriptPath='/nas/helio/ELEvoHI_plotting/runs/',
          catPath='/nas/helio/ELEvoHI_plotting/HI_animate_module/cats/', readData=0,
