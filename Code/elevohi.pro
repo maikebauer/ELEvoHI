@@ -313,7 +313,7 @@ case source of
         restore, filen, /verb
 
         track = {track_date: time, elon: elon, elon_std: elon_err, sc: sc}
-        save, track, filename = dir+'*_ccsds.sav'
+        save, track, filename = dir+eventdateSC+'_ccsds.sav'
         end
     'user-defined': begin
         print, 'User-defined HI input file'
@@ -324,7 +324,7 @@ case source of
         ;sc=track.sc
 
         track.track_date = anytim(track.track_date, /ccsds)
-        save, track, filename = dir+'*_ccsds.sav'
+        save, track, filename = dir+eventdateSC+'_ccsds.sav'
         end
     else: print, 'Define HI input file!'
 endcase
@@ -836,6 +836,7 @@ if keyword_set(statistics) and ensemble eq 1 then begin
     save, nofit_para, filename=dir+'invalidFits.sav'
 endif
 
+IF KEYWORD_SET(REALTIME) THEN realtime='True' ELSE realtime='False'
 
 if ensemble ne 1 then begin
     print, 'No estimation of uncertainty in single run mode!'

@@ -82,11 +82,10 @@ endif else begin
   if not single then begin
     dir = '/nas/helio/data/STEREO/HItracks/mabauer/'
     file_in = dir + start + '_' + sc + '_' + bflag + '.sav'
-
+  endif
   if single then begin
     dir = '/nas/helio/data/STEREO/HItracks/mabauer/Single/'
     file_in = dir + start + '_A_' + bflag + tr_num + '.sav'
-
   endif
 endelse
 
