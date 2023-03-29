@@ -1,5 +1,5 @@
-;get distance of Solar Orbiter from Sun
-FUNCTION solo_rsun, datetime, sc, DISTANCE=distance
+;get distance of PSP from Sun
+FUNCTION psp_rsun, datetime, sc, DISTANCE=distance
 
 heed=get_sunspice_lonlat(datetime,sc,system='hee')
 distance=heed[0,*]

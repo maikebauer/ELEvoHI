@@ -45,7 +45,7 @@ FUNCTION CIRCLE, xcenter, ycenter, radius
 ;			  Graz, Austria
 ; -
 
-function get_bgsw_hux, file, tinit, startcut, endcut, minphi, maxphi, halfWidth, sc, stepSize=stepSize, MAE = MAE, savePlot=savePlot, earthLon = earthLon, minSW = minSW, plotPath = plotPath, saveData = saveData
+function get_bgsw_hux, file, tinit, startcut, endcut, minphi, maxphi, halfWidth, sc, crval, stepSize=stepSize, MAE = MAE, savePlot=savePlot, earthLon = earthLon, minSW = minSW, plotPath = plotPath, saveData = saveData
 
   eventDate = strmid(file, strpos(file, 'vmap')-11, 8)
 
@@ -69,23 +69,45 @@ function get_bgsw_hux, file, tinit, startcut, endcut, minphi, maxphi, halfWidth,
   if keyword_set(minSW) then minimumSW = minSW
 
 
+  ;get SC positions
+  if (sc eq 'A') or (sc eq 'B') then begin
+    pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+    pos_A=get_sunspice_lonlat(tinit, 'Ahead', system='HEE')
+    pos_B=get_sunspice_lonlat(tinit, 'Behind', system='HEE')
+  endif
 
-  pos_E=get_stereo_lonlat(tinit, 'Earth', system='HEE')
-  pos_A=get_stereo_lonlat(tinit, 'Ahead', system='HEE')
-  pos_B=get_stereo_lonlat(tinit, 'Behind', system='HEE')
+  if (sc eq 'Solar_Orbiter') then begin
+    pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+    pos_SolO=get_sunspice_lonlat(tinit, 'Solar_Orbiter', system='HEE')
+  endif
+
+  if (sc eq 'PSP') then begin
+    pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+    pos_PSP=get_sunspice_lonlat(tinit, 'PSP', system='HEE')
+  endif
     
 
   phi_mean = mean([minphi, maxphi])
   ;calculate direction from Earth
   ; divide by 2 because it is defined in degree
+
+  ;get direction of CME apex relative to Earth
   if sc eq 'A' then begin
-    sep=abs(pos_E[1]-pos_A[1])/!dtor  
-    dir_E=fix((sep-phi_mean)/2)
+    dir_E = get_orientation(minphi, pos_A, pos_E, crval)
   endif
+
   if sc eq 'B' then begin
-    sep=abs(pos_E[1]-pos_B[1])/!dtor  
-    dir_E=fix(-(sep-phi_mean)/2)
-  endif  
+    dir_E = get_orientation(minphi, pos_B, pos_E, crval)
+  endif
+
+  if sc eq 'Solar_Orbiter' then begin
+    dir_E = get_orientation(minphi, pos_SolO, pos_E, crval)
+  endif
+
+  if sc eq 'PSP' then begin
+    dir_E = get_orientation(minphi, pos_PSP, pos_E, crval)
+  endif
+
 
   array = ''
   line = ''
@@ -118,7 +140,7 @@ function get_bgsw_hux, file, tinit, startcut, endcut, minphi, maxphi, halfWidth,
   newdata = data
   newData = shift(newData, [shiftVal, 0])
 
-  ; divide by 2 because it is defined in degree
+  ; divide by 2 because it is defined in degrees
   hw = halfWidth/2
 
   newbgsw = newdata[earthPos-hw+shiftVal-dir_E-phiDiff:earthPos+hw+shiftVal-dir_E+phiDiff, startcut:endcut]
@@ -135,7 +157,7 @@ function get_bgsw_hux, file, tinit, startcut, endcut, minphi, maxphi, halfWidth,
     newdata[earthPos+hw+shiftVal-dir_E+phiDiff, startcut:endcut] = maxVal
     newdata[earthPos-hw+shiftVal-dir_E-phiDiff:earthPos+hw+shiftVal-dir_E+phiDiff, endcut] = maxVal
     ;newdata[earthPos+shiftval, 0:400] = maxVal
-;    newData[earthPos+shiftval-dir_E, startcut:endcut] = min(data)
+    ;newData[earthPos+shiftval-dir_E, startcut:endcut] = min(data)
   endif
 
   ; shift data back

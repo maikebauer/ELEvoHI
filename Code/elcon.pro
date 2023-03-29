@@ -27,45 +27,35 @@
 
 PRO elcon, elon, d, phi, lambda, f, R_ell
 
+
 p=!dtor*phi
 l=!dtor*lambda
 e=!dtor*elon
 R_ell = fltarr(n_elements(e))
 
-
 for i=0, n_elements(R_ell)-1 do begin
-
-  beta1 = !dpi-e[i]-p
+  beta1 = !dpi-e[i]-p[i]
 
   if beta1 gt !dpi/2. then begin
-      beta1=e[i]+p
+      beta1=e[i]+p[i]
   endif
 
+    theta=atan(f^2*tan(beta1))
+    w=sqrt((cos(theta)^2)*(f^2-1)+1)
+
+    thetas=atan(f^2*tan(l))
+    ws=sqrt((cos(thetas)^2)*(f^2-1)+1)
+
+    X=((cos(l-thetas)/sin(l))+ws)^(-1) * ((cos(e[i]+p[i]+theta)/(w*sin(e[i]+p[i])))+1)
+
+    if !dpi-e[i]-p[i] gt !dpi/2 then begin
+      X=((cos(l-thetas)/sin(l))+ws)^(-1) * ((-sin(!dpi/2+theta-e[i]-p[i])/(w*sin(e[i]+p[i])))+1)
+    endif
 
 
-   theta=atan(f^2*tan(beta1))
-   w=sqrt((cos(theta)^2)*(f^2-1)+1)
-
-   thetas=atan(f^2*tan(l))
-   ws=sqrt((cos(thetas)^2)*(f^2-1)+1)
-
-
-
-   X=((cos(l-thetas)/sin(l))+ws)^(-1) * ((cos(e[i]+p+theta)/(w*sin(e[i]+p)))+1)
-
-
-   if !dpi-e[i]-p gt !dpi/2 then begin
-      X=((cos(l-thetas)/sin(l))+ws)^(-1) * ((-sin(!dpi/2+theta-e[i]-p)/(w*sin(e[i]+p)))+1)
-   endif
-
-
-   Y=(d*sin(e[i]))/(sin(e[i]+p))
-
-   R_ell[i]=Y/(1-ws*X)
-
-
+    Y=(d[i]*sin(e[i]))/(sin(e[i]+p[i]))
+    R_ell[i]=Y/(1-ws*X)
 endfor
-
 
 end
 

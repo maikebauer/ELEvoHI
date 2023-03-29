@@ -73,7 +73,7 @@ function fitall_sse_tro, cut=cut, start=start, bflag=bflag, dir=dir, lambda=setl
 
 if KEYWORD_SET(single) then single=1 else single=0
 
-if sc eq 'Solar Orbiter' then begin
+if sc eq 'SolarOrbiter' then begin
   dir = '/nas/helio/data/SolarOrbiter/HItracks/mabauer/'
   file_in = dir + start + '.sav'
   bflag=''
@@ -87,6 +87,24 @@ endif else begin
     dir = '/nas/helio/data/STEREO/HItracks/mabauer/Single/'
     file_in = dir + start + '_A_' + bflag + tr_num + '.sav'
   endif
+
+endelse
+
+if sc eq 'PSP' then begin
+  dir = '/nas/helio/data/PSP/HItracks/mabauer/'
+  file_in = dir + start + '.sav'
+  bflag=''
+endif else begin
+
+  if not single then begin
+    dir = '/nas/helio/data/STEREO/HItracks/mabauer/'
+    file_in = dir + start + '_' + sc + '_' + bflag + '.sav'
+  endif
+  if single then begin
+    dir = '/nas/helio/data/STEREO/HItracks/mabauer/Single/'
+    file_in = dir + start + '_A_' + bflag + tr_num + '.sav'
+  endif
+
 endelse
 
 restore, file_in
@@ -102,7 +120,8 @@ epsilon=tr.elon;track_y
 scname=tr.sc;
 ;tr.date=0
 
-if sc eq 'Solar Orbiter' then scname = 'Solar Orbiter'
+if sc eq 'SolarOrbiter' then scname = 'Solar Orbiter'
+if sc eq 'PSP' then scname = 'PSP'
 
 ; set parameters for the imaging observatory
 if scname eq 'A' then begin
@@ -124,6 +143,15 @@ if scname eq 'B' then begin
 endif
 
 if scname eq 'Solar Orbiter' then begin
+    othersc='A'
+    angle_signum=1
+    ;IF KEYWORD_SET(dir) THEN BEGIN
+    ;  initialphi=dir;
+    ; ENDIF ELSE BEGIN
+    initialphi=+60;
+endif
+
+if scname eq 'PSP' then begin
     othersc='A'
     angle_signum=1
     ;IF KEYWORD_SET(dir) THEN BEGIN
@@ -159,15 +187,16 @@ endif
 
 s=size(time)
 
-;get STEREO positions
-pos1=get_stereo_lonlat(time(s[1]/2), scname, system='HEE')
-pos2=get_stereo_lonlat(time(s[1]/2), scname, system='HEEQ')
+;input all times into get_sunspice_lonlat
+;get SC positions
+pos1=get_sunspice_lonlat(time, scname, system='HEE')
+pos2=get_sunspice_lonlat(time, scname, system='HEEQ')
 
-posother=get_stereo_lonlat(time(s[1]/2), othersc, system='HEE')
-posother2=get_stereo_lonlat(time(s[1]/2), othersc, system='HEEQ')
+posother=get_sunspice_lonlat(time, othersc, system='HEE')
+posother2=get_sunspice_lonlat(time, othersc, system='HEEQ')
 
 ;get position of the Earth
-posearth=get_stereo_lonlat(time(s[1]/2), 'earth', system='HEE')
+posearth=get_sunspice_lonlat(time, 'earth', system='HEE')
 
 
 print,'Spacecraft positions on ', time(s[1]/2)
@@ -197,7 +226,9 @@ tzero=anytim(time[0])
 ;---------------FITTING
 
 degtorad=!dpi/180;
-H0=pos1[0];Imaging observatory to Sun in km
+H0=TRANSPOSE(pos1[0, *]);Imaging observatory to Sun in km
+
+
 ;------------------
 ;starting points of the minimization
 phi=initialphi*degtorad;
@@ -212,8 +243,7 @@ xueber=tes;
 yueber=epsilon;
 dst=H0;
 RES=0;
-RES=AMOEBA(1.0e-5,FUNCTION_NAME='fitj',FUNCTION_VALUE=values,P0=X,scale=[1,100,1e4]);
-
+RES=AMOEBA(1.0e-5,FUNCTION_NAME='fitj_bauer',FUNCTION_VALUE=values,P0=X,scale=[1,100,1e4]);
 
 ;Harmonic Mean fitting
 X=[phi, vr, tinit];
@@ -223,10 +253,7 @@ yueber2=epsilon;
 scnameueber2=scname;
 dst2=H0;
 RESH=0;
-RESH=AMOEBA(1.0e-5,FUNCTION_NAME='fith2',FUNCTION_VALUE=values,P0=X,scale=[1,100,1e4]);
-
-
-
+RESH=AMOEBA(1.0e-5,FUNCTION_NAME='fith2_bauer',FUNCTION_VALUE=values,P0=X,scale=[1,100,1e4]);
 
 X=[phi, vr, tinit];
 common myfit3, xueber3, yueber3, dst3, scnameueber3, lambda
@@ -243,7 +270,7 @@ IF KEYWORD_SET(setlambda) THEN BEGIN
 
 ;SSE fitting
 RESS=0;
-RESS=AMOEBA(1.0e-5,FUNCTION_NAME='fitsse',FUNCTION_VALUE=values,P0=X,scale=[1,100,1e4]);
+RESS=AMOEBA(1.0e-5,FUNCTION_NAME='fitsse_bauer',FUNCTION_VALUE=values,P0=X,scale=[1,100,1e4]);
 
 ;FITTING RESULTS
 
@@ -457,6 +484,8 @@ print, '  '
 ;make interpolated time array so the fitting curve is smooth
 timeinterp=findgen(101)
 tesinterp=findgen(101)
+
+
 timestep=(anytim(time(elements(1)-1))-anytim(time(0)))/100;
  for i=0,100 do begin
   timeinterp(i)=anytim(time(0))+i*timestep;
@@ -464,10 +493,12 @@ timestep=(anytim(time(elements(1)-1))-anytim(time(0)))/100;
  endfor
 
 ;FP: synthetic elongation time function from fits
+H0_interp = get_sunspice_lonlat(anytim(timeinterp,/vms), scname, system='HEE')
+H0_interp = TRANSPOSE(H0_interp[0, *])
 
 delta=90*degtorad-RES[0]
 ;rho=RES[1]*(tes-RES[2])/H0;
-rho=RES[1]*(tesinterp-RES[2])/H0;
+rho=RES[1]*(tesinterp-RES[2])/H0_interp;
 fitmin=atan(rho*cos(delta)/(1-rho*sin(delta) ) )/degtorad
 
 
@@ -476,20 +507,28 @@ phi=RESH[0]
 ;because of the problems with the acosine one needs to switch the beta back to negative
 ;so that its positive in fith.pro
 if scname eq 'A' then phi=-RESH[0]
+
+dst_interp = get_sunspice_lonlat(anytim(timeinterp,/vms), scname, system='HEE')
+dst_interp = TRANSPOSE(dst_interp[0, *])
+
 v=RESH[1]
 t=(tesinterp-RESH[2])
-a=(2*dst)/(v*t)-cos(phi)
+a=(2*dst_interp)/(v*t)-cos(phi)
 b=sin(phi)
 fitminh=-acos((-b+a*sqrt(a^2+b^2-1))/(a^2+b^2) ) /degtorad
 
 
 ;SSE synthetic function with Davies et al. 2012 formula:
+
+dst3_interp = get_sunspice_lonlat(anytim(timeinterp,/vms), scname, system='HEE')
+dst3_interp = TRANSPOSE(dst3_interp[0, *])
+
 phi=RESS[0]
 if scname eq 'A' then phi=-RESS[0]
 v=RESS[1]
 t=(tesinterp-RESS[2])
 c=sin(lambda)
-a=((dst3*(1+c))/(v*t))-cos(phi)
+a=((dst3_interp*(1+c))/(v*t))-cos(phi)
 b=sin(phi)
 fitmins=acos( (-b*c+a*sqrt((a^2+b^2-c^2)))/((a^2+b^2))      ) /degtorad
 
@@ -510,7 +549,6 @@ window,1,  xsize=1500,ysize=400, retain=2,xpos=0,ypos=500
 !p.multi=[0,3,1]
 !p.background=255
 !p.color=0
-
 
 ;********left panel fixed phi
  ymax=max(tr.elon)+10

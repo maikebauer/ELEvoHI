@@ -1,0 +1,8 @@
+A
+/nas/helio/data/STEREO/secchi/
+B
+/nas/helio/data/STEREO/secchi/
+SOLO
+/nas/helio/data/SolarOrbiter/SOLOHI/L1/
+PSP
+/nas/helio/data/PSP/WISPR/L3/

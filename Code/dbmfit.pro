@@ -24,7 +24,7 @@
 ;         We are happy if you could send a copy of the article to tanja.amerstorfer@oeaw.ac.at.
 ; -
 
-PRO dbmfit, time, r_apex, r_error, sw, dir, runnumber, tinit, rinit, vinit, swspeed, drag_parameter, fitend, lambda, phi, startcut=startcut, endcut=endcut, silent=silent, nightly=nightly, bgsw, bgswData=bgswData, spendcut=spendcut
+PRO dbmfit, time, r_apex, r_error, sw, dir, runnumber, tinit, rinit, vinit, swspeed, drag_parameter, fitend, lambda, phi, crval, startcut=startcut, endcut=endcut, silent=silent, nightly=nightly, bgsw, bgswData=bgswData, spendcut=spendcut
 
 au=149597870.
 r_sun=695700.
@@ -259,18 +259,18 @@ if strupcase(bgsw) eq 'HUX' then begin
 	event = strmid(dir, strpos(dir, '/', /reverse_search)-10, 11)
     bgsw_file = datadir + 'bgsw_WSA/' + event + 'vmap.txt'
     sc = strmid(event, 9, 1)
-	winds = get_bgsw_hux(bgsw_file, time[cut], scut, r_apex_sun[ecut], phi, phi, lambda, sc);, /saveData, plotPath = dir)
+	winds = get_bgsw_hux(bgsw_file, time[cut], scut, r_apex_sun[ecut], phi[cut], phi[ecut], lambda, sc, crval[cut]);, /saveData, plotPath = dir)
 endif
 
 if strupcase(bgsw) eq 'HUXT' then begin
 	; run ELEvoHI with the data from the modeled background solar wind
 	sc = strmid(dir, strpos(dir, '/', /reverse_search)-1, 1)
-    winds = get_bgsw_huxt(bgswData, time[cut], time[ecut], scut, r_apex_sun[ecut], phi, lambda, sc)
+    winds = get_bgsw_huxt(bgswData, time[cut], time[ecut], scut, r_apex_sun[ecut], phi[cut], lambda, sc,  crval[cut])
 endif
 
 if strupcase(bgsw) eq 'EUHFORIA' then begin
     sc = strmid(dir, strpos(dir, '/', /reverse_search)-1, 1)
-    winds = get_bgsw_euhforia(bgswData, time[cut], scut, r_apex_sun[ecut], phi, lambda, sc)
+    winds = get_bgsw_euhforia(bgswData, time[cut], scut, r_apex_sun[ecut],  phi[cut], lambda, sc, crval[cut])
 endif
 
 fitauall=fltarr(n_elements(winds),n_elements(y))

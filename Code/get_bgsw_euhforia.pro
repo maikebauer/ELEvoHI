@@ -23,7 +23,7 @@
 ;			  Graz, Austria
 ; -
 
-function get_bgsw_euhforia, bgswData, tinit, startcut, endcut, phi, halfWidth, sc
+function get_bgsw_euhforia, bgswData, tinit, startcut, endcut, phi, halfWidth, sc, crval
 
     tinitnum = anytim(tinit)
     
@@ -45,18 +45,41 @@ function get_bgsw_euhforia, bgswData, tinit, startcut, endcut, phi, halfWidth, s
     stSize = 25 ;km/s
     minimumSW = 233 ;km/s
 
-    pos_E=get_stereo_lonlat(tinit, 'Earth', system='HEE')
-    pos_A=get_stereo_lonlat(tinit, 'Ahead', system='HEE')
-    pos_B=get_stereo_lonlat(tinit, 'Behind', system='HEE')
-    
-    if sc eq 'A' then begin
-        sep=abs(pos_E[1]-pos_A[1])/!dtor  
-        dir_E=(sep-phi)
+    ;get SC positions
+    if (sc eq 'A') or (sc eq 'B') then begin
+        pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+        pos_A=get_sunspice_lonlat(tinit, 'Ahead', system='HEE')
+        pos_B=get_sunspice_lonlat(tinit, 'Behind', system='HEE')
     endif
+
+    if (sc eq 'Solar_Orbiter') then begin
+        pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+        pos_SolO=get_sunspice_lonlat(tinit, 'Solar_Orbiter', system='HEE')
+    endif
+
+    if (sc eq 'PSP') then begin
+        pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+        pos_PSP=get_sunspice_lonlat(tinit, 'PSP', system='HEE')
+    endif
+
+    print, phi
+
+    ;calculate direction from Earth
+    if sc eq 'A' then begin
+      dir_E = get_orientation(phi, pos_A, pos_E, crval)
+    endif
+
     if sc eq 'B' then begin
-        sep=abs(pos_E[1]-pos_B[1])/!dtor  
-        dir_E=-(sep-phi)
-    endif 
+      dir_E = get_orientation(phi, pos_B, pos_E, crval)
+    endif
+
+    if sc eq 'Solar_Orbiter' then begin
+      dir_E = get_orientation(phi, pos_SolO, pos_E, crval)
+    endif
+
+    if sc eq 'PSP' then begin
+      dir_E = get_orientation(phi, pos_PSP, pos_E, crval)
+    endif
     
     lonApex = lonDeg + shiftval - dir_e
     indApex = where(abs(lonApex) eq min(abs(lonApex)))

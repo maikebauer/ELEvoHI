@@ -1,14 +1,14 @@
 ;produce .txt input file for elevo.pro from ElCon/DBM-fitting output
 
-PRO elevo_input, sc, hwidth, aspect_ratio, phi, tinit, rinit, vinit, swspeed, drag_parameter, dir, realtime=realtime
+PRO elevo_input, sc, hwidth, aspect_ratio, phi, crval, tinit, rinit, vinit, swspeed, drag_parameter, dir
 
 AU=149597871 ;km
 r_sun=6.957d5; km
 
 if (sc eq 'A') or (sc eq 'B') then begin
-  pos_E=get_stereo_lonlat(tinit, 'Earth', system='HEE')
-  pos_A=get_stereo_lonlat(tinit, 'Ahead', system='HEE')
-  pos_B=get_stereo_lonlat(tinit, 'Behind', system='HEE')
+  pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+  pos_A=get_sunspice_lonlat(tinit, 'Ahead', system='HEE')
+  pos_B=get_sunspice_lonlat(tinit, 'Behind', system='HEE')
 endif
 
 if (sc eq 'Solar_Orbiter') then begin
@@ -16,39 +16,28 @@ if (sc eq 'Solar_Orbiter') then begin
   pos_SolO=get_sunspice_lonlat(tinit, 'Solar_Orbiter', system='HEE')
 endif
 
+if (sc eq 'PSP') then begin
+  pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+  pos_PSP=get_sunspice_lonlat(tinit, 'PSP', system='HEE')
+endif
+
 ;calculate direction from Earth
-
 if sc eq 'A' then begin
-  sep=abs(pos_E[1]-pos_A[1])/!dtor
-  dir_E=sep-phi
+  dir_E = get_orientation(phi, pos_A, pos_E, crval)
 endif
+
 if sc eq 'B' then begin
-  sep=abs(pos_E[1]-pos_B[1])/!dtor
-  dir_E=-(sep-phi)
+  dir_E = get_orientation(phi, pos_B, pos_E, crval)
 endif
+
 if sc eq 'Solar_Orbiter' then begin
-  sep=abs(pos_E[1]-pos_SolO[1])/!dtor
-  dir_E=sep-phi
+  dir_E = get_orientation(phi, pos_SolO, pos_E, crval)
 endif
 
-
-
-if keyword_set(realtime) then begin
-    if sc eq 'B' then begin
-      sep=abs(pos_E[1]-pos_B[1])/!dtor
-      dir_E=sep-phi
-    endif
-    if sc eq 'A' then begin
-      sep=abs(pos_E[1]-pos_A[1])/!dtor
-      dir_E=-(sep-phi)
-    endif
-    if sc eq 'Solar_Orbiter' then begin
-      sep=abs(pos_E[1]-pos_SolO[1])/!dtor
-      dir_E=-(sep-phi)
-    endif
+if sc eq 'PSP' then begin
+  dir_E = get_orientation(phi, pos_PSP, pos_E, crval)
 endif
 
-print, dir_E
 
 rinit=strtrim(string(rinit),2)
 vinit=strtrim(string(vinit),2)

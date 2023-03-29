@@ -6,7 +6,7 @@
 ;              for each ensemble member a .sav-file is stored with all the needed information
 ;              at the end of elevohi, all these .sav-files are combined to one final .sav file ('frontDataAll.sav')
 ;
-; Calling sequence: deformable_front, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_parameter, defFrontStartTime, speedEndCut, sc, bgswdata, bgswTimeNum, runnumber, resdir, realtime=realtime
+; Calling sequence: deformable_front, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_parameter, defFrontStartTime, speedEndCut, sc, bgswdata, bgswTimeNum, runnumber, resdir
 ;
 ; Parameters (input):
 ;              bgsw: which ambient solar wind is used ('HUX' or 'HUXt')
@@ -25,7 +25,6 @@
 ;              bgswTimeNum: time for which the ambient solar wind speed was created
 ;              runnumber: number of run in the ensemble mode
 ;              resdir: directory for the .sav-files
-;              realtime: keyword to use for realtime (meaning STA is already east of Earth when looking from Earth to Sun)
 ;
 ; History:    2021/03: created (Juergen Hinterreiter)
 ;
@@ -34,16 +33,16 @@
 ;              Graz, Austria
 ; -
 
-pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_parameter, defFrontStartTime, speedEndCut, sc, bgswdata, bgswTimeNum, runnumber, resdir, realtime=realtime
+pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_parameter, defFrontStartTime, speedEndCut, sc, bgswdata, bgswTimeNum, runnumber, resdir
     runtimeStart = systime(/seconds)
     au=double(149597870.)
     r_sun=double(695700.)
 
-    
+
     numberOfEllPoints = 101
     timeResolution = 15 ; in minutes
 
-    maxRRun = 300    
+    maxRRun = 300
     if strupcase(bgsw) eq 'HUXT' then begin
         timeResolution = 0
         while timeResolution lt 15 do begin
@@ -51,42 +50,52 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
         endwhile
         maxRRun = fix(max(bgswData.r))
     endif
-    
+
     if strupcase(bgsw) eq 'EUHFORIA' then maxRRun = fix(max(bgswData.r))
-    
+
     print, timeResolution
     runDays = 5
     numberTimeArray = runDays*24*60/timeResolution
-    
-    
-    if finite(tinit) ne 0 and tinit ne 0 then begin
-        pos_E=get_stereo_lonlat(tinit, 'Earth', system='HEE')
-        pos_A=get_stereo_lonlat(tinit, 'Ahead', system='HEE')
-        pos_B=get_stereo_lonlat(tinit, 'Behind', system='HEE')
 
+
+    if finite(tinit) ne 0 and tinit ne 0 then begin
+        
+        ;get SC positions
+        if (sc eq 'A') or (sc eq 'B') then begin
+            pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+            pos_A=get_sunspice_lonlat(tinit, 'Ahead', system='HEE')
+            pos_B=get_sunspice_lonlat(tinit, 'Behind', system='HEE')
+        endif
+
+        if (sc eq 'Solar_Orbiter') then begin
+            pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+            pos_SolO=get_sunspice_lonlat(tinit, 'Solar_Orbiter', system='HEE')
+        endif
+
+        if (sc eq 'PSP') then begin
+            pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+            pos_PSP=get_sunspice_lonlat(tinit, 'PSP', system='HEE')
+        endif
+
+        print, phi
 
         ;calculate direction from Earth
-
         if sc eq 'A' then begin
-            sep=abs(pos_E[1]-pos_A[1])/!dtor
-            dir_E=sep-phi
+          dir_E = get_orientation(phi, pos_A, pos_E, crval)
         endif
+
         if sc eq 'B' then begin
-            sep=abs(pos_E[1]-pos_B[1])/!dtor
-            dir_E=-(sep-phi)
+          dir_E = get_orientation(phi, pos_B, pos_E, crval)
         endif
-        
-        if keyword_set(realtime) then begin
-            print, 'KW realtime set?'
-            if sc eq 'B' then begin
-                sep=abs(pos_E[1]-pos_B[1])/!dtor
-                dir_E=sep-phi
-            endif
-            if sc eq 'A' then begin
-                sep=abs(pos_E[1]-pos_A[1])/!dtor
-                dir_E=-(sep-phi)
-            endif
+
+        if sc eq 'Solar_Orbiter' then begin
+          dir_E = get_orientation(phi, pos_SolO, pos_E, crval)
         endif
+
+        if sc eq 'PSP' then begin
+          dir_E = get_orientation(phi, pos_PSP, pos_E, crval)
+        endif
+
         print, 'runnumber: ', runnumber
 
         distAU = double(fitend) ; [AU]
@@ -120,7 +129,7 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
 
         csArea = a*cLat*!pi*r_sun*r_sun ; [km^2]
 
-  
+
         rhoSW = double(get_bgsw_density(fitend, swspeed, mass_dens=1)) ; [g/km^3]
         dp = abs(double(drag_parameter)) ; [km^-1]
         dp = double(drag_parameter) ; [km^-1]
@@ -134,23 +143,23 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
         print, 'dp [km^-1]:', dp
         print, 'csArea [km^2]: ', csArea
         print, 'mass [g]: ', mass
-        
+
         dragNew = csArea*rhoSW/mass
 ;        print, 'drag new: '
 ;        print, dragNew
-        
+
         ;to draw parts of ellipse phi should go from 0 to 135 and then from 225 to 360
         ; min(phiell) has to be 260 max(phiell) has to be 460 (because 360 is direction)
         phiEll=findgen(numberOfEllPoints)*200/(numberofEllPoints-1)+260
 
         phiEll=phiEll*!dpi/180.
-        
+
         ;original version
         ;phi = 2*!pi*(findgen(npoints)/(npoints-1))       ;Divide circle into Npoints
         ang = pos_ang/!RADEG                            ;Position angle in radians
         cosang = cos(ang)
         sinang = sin(ang)
-        
+
         x =  rmax*cos(phiEll)              ;Parameterized equation of ellipse
         y =  rmin*sin(phiEll)
 
@@ -160,7 +169,7 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
 
         R_ellipse = sqrt(xprime*xprime + yprime*yprime)
         lon_ell = atan(yprime, xprime)
-         
+
         lonellnew = (lon_ell - lon_ell[n_elements(lon_ell)/2])*180/!dpi
         lonNew = lonellnew + earthangle
         ;print, lonNew
@@ -221,11 +230,11 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
                     background_wind = sw_speed
 
                     if vbefore[i] lt background_wind then accsign = -1
-                    
+
                     dragRuns[i] = gammaparam*accsign
                     densRuns[i] = sw_density
                     swRuns[i] = background_wind
-         
+
                     ; calculate the new distance and speed at each point
                     rnew=(accsign/(gammaparam))*alog(1+(accsign*(gammaparam)*((vbefore[i]-background_wind)*(tdrag[j]-tinitnum))))+background_wind*(tdrag[j]-tinitnum)+rbefore[i]*r_sun
                     vnew=(vbefore[i]-background_wind)/(1+(accsign*(gammaparam)*((vbefore[i]-background_wind)*(tdrag[j]-tinitnum))))+background_wind
@@ -251,9 +260,9 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
                      rnew = rnew/r_sun
 
                      rbefore[i] = rnew
-                     vbefore[i] = vnew             
+                     vbefore[i] = vnew
                 endfor
-                
+
                 frontArr[j, *] = rbefore
                 vArr[j, *] = vbefore
                 dragArr[j, *] = dragRuns
@@ -263,18 +272,18 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
                 j = n_elements(tdrag)-1
             endelse
             tinitnum = tdrag[j]
-            
+
         endfor
 
         timearr = tdrag
-    
+
         noEarthHit = 0
         indMinLon = where(abs(lonnew) eq min(abs(lonnew)))
         if min(abs(lonnew)) gt 1 then noEarthHit = 1
         radsEarth = frontarr[*, indMinLon]
         distEarth = pos_E[0]/r_sun - 1.5e6/r_sun ; correct for L1
         print, distEarth
-        
+
         indMinRad = where(abs(radsEarth - distEarth) eq min(abs(radsEarth - distEarth)))
 
         distEarth = radsEarth[indMinRad]
@@ -306,13 +315,13 @@ pro deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_
         runDP = dp
         filenameFront = 'frontData_'+string(runnumber, format='(I003)')+'.sav'
         save, timearr, frontarr, vArr, dragArr, densArr, swArr, longitude, indEarthDirection, distEarth, arrtimeEarth, vEarth, phi, lambda, f, runarea, runmass, distmass, runRho, runDP, filename = resdir + filenameFront
-        
+
         if runnumber eq 1 then begin
             print, 'Save front Data'
-            filenameFront = 'firstRun_frontData.sav'        
+            filenameFront = 'firstRun_frontData.sav'
             save, timearr, frontarr, vArr, dragArr, densArr, swArr, longitude, indEarthDirection, distEarth, arrtimeEarth, vEarth, phi, lambda, f, runarea, runmass, distmass, runRho, runDP, filename = resdir + filenameFront
         endif
-    
+
         print, 'single run neededs ', (systime(/seconds)-runtimeStart), ' seconds', format='(A20, F5.1, A9)'
      endif
 end

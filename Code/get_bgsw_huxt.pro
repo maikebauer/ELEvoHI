@@ -30,25 +30,46 @@
 ;			  Graz, Austria
 ; -
 
-function get_bgsw_huxt, bgswData, tstart, tend, startcut, endcut, phi, lambda, sc
+function get_bgsw_huxt, bgswData, tstart, tend, startcut, endcut, phi, lambda, sc, crval
 
     tinit = tstart
     scut = round(startcut) - bgswData.r[0]
     ecut = round(endcut)- bgswData.r[0]
 
-    pos_E=get_stereo_lonlat(tinit, 'Earth', system='HEE')
-    pos_A=get_stereo_lonlat(tinit, 'Ahead', system='HEE')
-    pos_B=get_stereo_lonlat(tinit, 'Behind', system='HEE')
+    ;get SC positions
+    if (sc eq 'A') or (sc eq 'B') then begin
+        pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+        pos_A=get_sunspice_lonlat(tinit, 'Ahead', system='HEE')
+        pos_B=get_sunspice_lonlat(tinit, 'Behind', system='HEE')
+    endif
+
+    if (sc eq 'Solar_Orbiter') then begin
+        pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+        pos_SolO=get_sunspice_lonlat(tinit, 'Solar_Orbiter', system='HEE')
+    endif
+
+    if (sc eq 'PSP') then begin
+        pos_E=get_sunspice_lonlat(tinit, 'Earth', system='HEE')
+        pos_PSP=get_sunspice_lonlat(tinit, 'PSP', system='HEE')
+    endif
 
     print, phi
+
     ;calculate direction from Earth
     if sc eq 'A' then begin
-        sep=abs(pos_E[1]-pos_A[1])/!dtor  
-        dir_E=(sep-phi)
+      dir_E = get_orientation(phi, pos_A, pos_E, crval)
     endif
+
     if sc eq 'B' then begin
-        sep=abs(pos_E[1]-pos_B[1])/!dtor  
-        dir_E=-(sep-phi)
+      dir_E = get_orientation(phi, pos_B, pos_E, crval)
+    endif
+
+    if sc eq 'Solar_Orbiter' then begin
+      dir_E = get_orientation(phi, pos_SolO, pos_E, crval)
+    endif
+
+    if sc eq 'PSP' then begin
+      dir_E = get_orientation(phi, pos_PSP, pos_E, crval)
     endif
   
     minLimit = (dir_E - lambda)*!dtor

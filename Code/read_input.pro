@@ -11,6 +11,13 @@ if (sc eq 'SolarOrbiter') then begin
 
 endif
 
+if (sc eq 'PSP') then begin
+
+  path = '/nas/helio/data/PSP/Events/' + STRMID(start, 0, 4) + '/Tracks/' + start + '/'
+  trc_file = FILE_SEARCH(path + '*.csv')
+
+endif
+
 if (sc eq 'A') or (sc eq 'B') then begin
 
   path = '/nas/helio/data/STEREO/Events/jplot/' + sc + '/' + bflag + '/hi1hi2/' + STRMID(start, 0, 4) + '/Tracks/' + start + '/'

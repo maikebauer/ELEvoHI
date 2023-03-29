@@ -471,7 +471,7 @@ if plot_psp then begin
         yy = psp[0]
         if (xx ge !x.crange[0]) and (xx le !x.crange[1]) and $
           (yy le !y.crange[0]) and (yy ge !y.crange[1]) then begin
-            plots, xx, yy, psym=8, color=orange
+            plots, xx, yy, psym=8, color=orange, symsize=1
             xyouts, xx, yy, ' PSP', color=orange
         endif
     endif

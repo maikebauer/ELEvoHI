@@ -35,6 +35,14 @@ if (sc eq 'SolarOrbiter') then begin
 
 endif
 
+if (sc eq 'PSP') then begin
+
+  path = '/nas/helio/data/PSP/Events/' + STRMID(event, 0, 4) + '/Tracks/' + event + '/'
+
+  infile = FILE_SEARCH(path + '*.sav')
+
+endif
+
 ;path = '/nas/helio/data/STEREO/Events/Old/' + event + '/jplot/' + bflag + '/'
 
 ;infile = files
@@ -215,6 +223,15 @@ IF KEYWORD_SET(save_file) THEN BEGIN
 
   endif
 
+  if (sc eq 'PSP') then begin
+
+    test = FILE_EXIST('/nas/helio/data/PSP/HItracks/mabauer/')
+
+    IF NOT test THEN FILE_MKDIR, '/nas/helio/data/PSP/HItracks/mabauer/'
+
+    file= '/nas/helio/data/PSP/HItracks/mabauer/' + event + '.sav'
+
+  endif
 
 
   print, file

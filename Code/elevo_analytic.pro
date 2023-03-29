@@ -45,14 +45,7 @@ function elevo_analytic, R, aspectratio, lambda, delta, speed=speed, out=out
 f=1d/aspectratio
 
 
-if abs(delta) ge lambda then begin 
-  ;Half width lambda must be greater than delta!
-  n=r*!Values.F_NAN
-  return, n
-end  
-
 ;*********************** construct ellipse
-
 
 
 ;two angles
@@ -108,8 +101,21 @@ IF KEYWORD_SET(out) THEN BEGIN
  END
 
 END
-; return dvalue and corrected speed; if speed is not set return just dvalue
 
+;ensure that spacecraft for which there is no position data return a nan array
+;positions where delta > lambda are aslo set to nan
+if n_elements(delta) eq n_elements(dvalue) then begin
+  for i=0,n_elements(dvalue)-1 do begin
+    if abs(delta[i]) ge lambda then begin
+      ;Half width lambda must be greater than delta!
+      dvalue[i]=!Values.F_NAN
+    endif  
+  endfor
+endif else begin
+  dvalue=r*!Values.F_NAN
+endelse
+
+; return dvalue and corrected speed; if speed is not set return just dvalue
 IF KEYWORD_SET(speed) THEN return, [dvalue, deltaspeed] ELSE return, dvalue
 
 

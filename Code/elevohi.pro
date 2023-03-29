@@ -34,10 +34,12 @@
 ;							nightly...........set TRUE to avoid plotting of the DBMfit
 ;							forMovie..........set TRUE to save the CME parameters (.sav-files can then be used to create a movie)
 ;							deformableFront...set TRUE to additionally create .sav-files with the information of the deformed CME front
-;             realtime.......set TRUE to get the correct angle for STEREO-A
 ;             bgsw...........set to 'stat' for range of background solar wind (250 - 700 km/s (25 km/s steps))
 ;                            set to 'HUX', 'HUXt' for to use background solar wind from model from HUX or HUXt
 ;                            set to 'insitu' for in-situ sw
+;             bflag..........set to 'science' for ST-HI science data
+;                            set to 'beacon' for ST-HI beacon data
+;                            leave blank otherwise
 ;
 ; Required functions and procedures:  	see readme
 ;
@@ -63,7 +65,7 @@
 ;		  Please add in the acknowledgements section of your article, where the ELEvoHI package can be obtained (figshare doi, github-link).
 ;         We are happy if you could send a copy of the article to tanja.amerstorfer@oeaw.ac.at.
 ; -
-PRO elevohi, save_results=save_results, statistics=statistics, silent=silent, nightly=nightly, forMovie=forMovie, realtime=realtime, bgsw=bgsw, deformableFront=deformableFront, bflag=bflag
+PRO elevohi, save_results=save_results, statistics=statistics, silent=silent, nightly=nightly, forMovie=forMovie, bgsw=bgsw, deformableFront=deformableFront, bflag=bflag
 
 
 if ~keyword_set(bgsw) then bgsw = 'stat'
@@ -102,6 +104,21 @@ OPENR, 10, fnam
     ENDWHILE
 CLOSE, 10
 
+;define path to file containing FITS paths for HI observers
+fnam_fits=path+'Code/elevohi_input_paths.txt'
+
+;read in file containing FITS paths
+str_fits_paths = STRARR(200)
+OPENR, 10, fnam_fits
+    dummy = ''
+    i = 0L
+    WHILE NOT(EOF(10)) DO BEGIN
+      READF, 10, dummy
+      str_fits_paths[i] = dummy
+      i = i + 1
+    ENDWHILE
+CLOSE, 10
+
 sc=str[4]
 
 evstr=strsplit(str[7], '/', /extract)
@@ -117,8 +134,8 @@ endelse
 eventdate=evstr[0]
 eventdateSC = eventdate+'_'+sc
 
+;append bflag to eventdate to get correct path output for ST science/beaocn data
 if KEYWORD_SET(bflag) then eventdateSC = eventdate+'_'+sc+'_'+bflag
-
 
 ;produce name for event directory
 dir=path+'PredictedEvents/'+eventdateSC+'/'
@@ -329,15 +346,20 @@ case source of
     else: print, 'Define HI input file!'
 endcase
 
+;get distance of HI observer from Sun
 if sc eq 'A' or sc eq 'B' then begin
-    res=stereo_rsun(time[0],sc,distance=distance)
+    res=stereo_rsun(time,sc,distance=distance)
 endif
 
 if sc eq 'Solar_Orbiter' then begin
-    res=solo_rsun(time[0],sc,distance=distance)
+    res=solo_rsun(time,sc,distance=distance)
 endif
 
-d=distance[0]/au ; Sun-s/c distance in AU
+if sc eq 'PSP' then begin
+    res=psp_rsun(time,sc,distance=distance)
+endif
+
+d=distance/au ; Sun-s/c distance in AU
 
 if bgsw eq 'insitu' then begin
     case insitu of
@@ -591,19 +613,99 @@ for k=0, n_phi-1 do begin
             ;direction of motion and a fixed (pre-defined) half width and ellipse aspect ratio.
             ;for more information please see Rollett et al. (2016, ApJ)
 
-            ;apex heliocentric distance in AU
-            elcon, elon, d, phi, lambda, f, r_ell
+            ;get spacecraft position at each point in time (time is taken from track)
+            sc_pos=get_sunspice_lonlat(time, sc, system='HEE')
+
+            ;convert track-time to TAI format
+            time_track_tai = utc2tai(str2utc(time))
+
+            ;get path to .fits file for HI observer
+            sc_fits_path = str_fits_paths[WHERE(STRMATCH(str_fits_paths, sc, /FOLD_CASE) EQ 1)+1]
+
+            ;set path to fits files correctly for starting date/bflag/observer
+            if KEYWORD_SET(bflag) then begin
+                if sc eq 'A' then sc_str = 'ahead'
+                if sc eq 'B' then sc_str = 'behind'
+
+                fits_ext = '*.fts'
+
+                if bflag eq 'science' then sc_fits_path = sc_fits_path + 'L0/' + STRMID(sc_str,0,1) + '/img/hi_1/' + eventdate + '/'
+                if bflag eq 'beacon' then sc_fits_path = sc_fits_path + 'beacon/' + sc_str + '/img/hi_1/' + eventdate + '/'
+            endif
+
+            if sc eq 'PSP' then begin
+                sc_fits_path = sc_fits_path + eventdate + '/'
+                fits_ext = '*.fits'
+            endif
+
+            if sc eq 'SOLO' then begin
+                sc_fits_path = sc_fits_path + eventdate + '/'
+                fits_ext = '*.fits'
+            endif
+
+            ;following section deals with getting CRVAL1 vlaues for given track-time
+            ;CRVAL1 (in combination with SC position) determines pointing of HI instrument
+
+            ;get list of all FITS files for starting date
+            fits_files=file_search(sc_fits_path, fits_ext)
+
+            ;define arrays for CRVAL1 and DATE-OBS keywords coming from FITS header
+            crval_fits = STRARR(n_elements(fits_files))
+            time_fits_tai = STRARR(n_elements(fits_files))
+
+            ;read in CRVAL1 and DATE-OBS of each FITS file on starting date
+            for i=0,n_elements(fits_files)-1 do begin
+                head=headfits(fits_files[i])
+                crval_fits[i] = SXPAR(head, 'CRVAL1')
+                time_fits_tai[i] = utc2tai(str2utc(SXPAR(head, 'DATE-OBS')))
+            endfor
+
+            ;define array for CRVAL1 values recorded on track-time         
+            crval_track = fltarr(n_elements(time_track_tai))
+
+            ;find FITS file closest to track-time and place measured CRVAL1 into array
+            for i=0,n_elements(time_track_tai)-1 do begin
+                ind_tai = value_locate(time_fits_tai, time_track_tai[i])
+                crval_track[i] = SIGNUM(crval_fits[ind_tai])
+            endfor
+            
+            ;make array for adjusted phi values
+            ;phi changes over time as sc moves -> only position of CME apex realtive to Earth is fixed
+            phi_pos = fltarr(n_elements(time_track_tai))
+
+            size_scpos = size(sc_pos)
+
+            ;phi is given relative to SC and is between 0 and 180 deg
+            ;phi_pos -> how does phi change realtive to tinit as SC moves?
+            ;calculation of phi_pos depends on trajectory of SC and position realtive to CME apex
+            for i=0, size_scpos[2]-1 do begin
+
+                if SIGNUM(sc_pos[1, i]) EQ SIGNUM(sc_pos[1,0]) then begin
+                    if sc_pos[1, i] ge 0 and crval_track[i] ge 0 then phi_pos[i] = phi - (sc_pos[1, i]/!dtor - sc_pos[1, 0]/!dtor)
+                    if sc_pos[1, i] ge 0 and crval_track[i] lt 0 then phi_pos[i] = phi + (sc_pos[1, i]/!dtor - sc_pos[1, 0]/!dtor)
+                    if sc_pos[1, i] lt 0 and crval_track[i] ge 0 then phi_pos[i] = phi - (sc_pos[1, i]/!dtor - sc_pos[1, 0]/!dtor)
+                    if sc_pos[1, i] lt 0 and crval_track[i] lt 0 then phi_pos[i] = phi + (sc_pos[1, i]/!dtor - sc_pos[1, 0]/!dtor)
+                endif
+
+                if SIGNUM(sc_pos[1, i]) NE SIGNUM(sc_pos[1,0]) then begin
+                    if sc_pos[1, i] ge 0 and crval_track[i] ge 0 then phi_pos[i] = phi - (sc_pos[1, i]/!dtor + (sc_pos[1, 0]/!dtor+360*SIGNUM(sc_pos[1,0])))
+                    if sc_pos[1, i] ge 0 and crval_track[i] lt 0 then phi_pos[i] = phi + (sc_pos[1, i]/!dtor + (sc_pos[1, 0]/!dtor+360*SIGNUM(sc_pos[1,0])))
+                    if sc_pos[1, i] lt 0 and crval_track[i] ge 0 then phi_pos[i] = phi - (sc_pos[1, i]/!dtor + (sc_pos[1, 0]/!dtor+360*SIGNUM(sc_pos[1,0])))
+                    if sc_pos[1, i] lt 0 and crval_track[i] lt 0 then phi_pos[i] = phi + (sc_pos[1, i]/!dtor + (sc_pos[1, 0]/!dtor+360*SIGNUM(sc_pos[1,0])))
+                endif
+
+            endfor
+
+            elcon, elon, d, phi_pos, lambda, f, r_ell
 
             ;error in AU
-            elcon, elon+elon_err, d, phi, lambda, f, r_errhi
-            elcon, elon-elon_err, d, phi, lambda, f, r_errlo
+            elcon, elon+elon_err, d, phi_pos, lambda, f, r_errhi
+            elcon, elon-elon_err, d, phi_pos, lambda, f, r_errlo
 
             r_err=fltarr(2,n_elements(r_ell))
 
             r_err[0,*]=r_errhi-r_ell
             r_err[1,*]=r_ell-r_errlo
-
-            print, r_ell[2]
 
             save, time, r_ell, r_err, phi, lambda, f, filename=dir+'elcon_results.sav'
 
@@ -619,7 +721,7 @@ for k=0, n_phi-1 do begin
             ;;print, 'EC: ', ec
             ;;endcut = ec
 
-            dbmfit, time, r_ell, r_err, sw, dir, runnumber, tinit, rinit, vinit, swspeed, drag_parameter, fitend, lambda, phi, startcut=startcut, endcut=endcut, silent=silent, nightly=nightly, bgsw, bgswData = bgswData, spEndCut=spEndCut
+            dbmfit, time, r_ell, r_err, sw, dir, runnumber, tinit, rinit, vinit, swspeed, drag_parameter, fitend, lambda, phi_pos, crval_track, startcut=startcut, endcut=endcut, silent=silent, nightly=nightly, bgsw, bgswData = bgswData, spEndCut=spEndCut
 
             if keyword_set(deformableFront) then begin
               	if strupcase(bgsw) ne 'HUX' and strupcase(bgsw) ne 'HUXT' and strupcase(bgsw) ne 'EUHFORIA' then begin
@@ -638,7 +740,7 @@ for k=0, n_phi-1 do begin
 
                     print, 'kappa: ', kappa
 
-                    deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_parameter, anytim(time[eC]), spEndcut, sc, bgswdata, bgswTimeNum, runnumber, resdir, realtime=realtime
+                    deformable_front, bgsw, lambda, f, phi, kappa, tinit, fitend, swspeed, drag_parameter, anytim(time[eC]), spEndcut, sc, bgswdata, bgswTimeNum, runnumber, resdir
 
                 endif
             endif
@@ -670,9 +772,13 @@ for k=0, n_phi-1 do begin
                 fitworks=fitworks+1
             endelse
 
-            elevo_input, sc, lambda, 1./f, phi, tinit, rinit, vinit, swspeed, drag_parameter, dir, realtime=realtime
-            elevo, dir, pred, elevo_kin, runnumber
+            ;create input file for elevo.pro
+            elevo_input, sc, lambda, 1./f, phi, crval_track[startcut], tinit, rinit, vinit, swspeed, drag_parameter, dir
 
+            ;propagate ellipse outwards
+            elevo, dir, pred, elevo_kin, runnumber
+            
+        
             if keyword_set(forMovie) then begin
                 elevo_kin.all_apex_s = sc
                 save, elevo_kin, startcut, endcut, filename=forMovieDir+'formovie'+string(runnumber, format='(I0004)')+'.sav'
@@ -836,7 +942,6 @@ if keyword_set(statistics) and ensemble eq 1 then begin
     save, nofit_para, filename=dir+'invalidFits.sav'
 endif
 
-IF KEYWORD_SET(REALTIME) THEN realtime='True' ELSE realtime='False'
 
 if ensemble ne 1 then begin
     print, 'No estimation of uncertainty in single run mode!'
@@ -865,7 +970,6 @@ if ensemble ne 1 then begin
     ;elongation used for fitting
     print, 'Elongation range used: ', mean(eelevohi.elongation_min), '-', mean(eelevohi.elongation_max)
 
-    print, 'realtime = ', realtime
 endelse
 
 journal
