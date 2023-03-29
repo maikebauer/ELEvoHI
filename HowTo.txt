@@ -1,0 +1,24 @@
+Python:
+Change date/bflag in config.txt -> python3 track_cme.py -> save Plot, close with click on mouse wheel
+
+IDL:
+
+start IDL: got to home ->  sh maikeidls.sh -> go to ELEvoHI/Code folder -> .com read_input.pro
+
+EITHER:
+
+read_input, 'date', nevents, 'sc', 'bflag' (sc = ['A', 'B', 'SolarOrbiter'], bflag = ['science', 'beacon', ''])
+
+track_statistics_maike, 'date', /make_dir, /save_file, /no_cor, 'sc', 'bflag' -> save Plot and Output (sc = ['A', 'B', 'SolarOrbiter'], bflag = ['science', 'beacon', ''])
+
+OR:
+
+convert_csv, 'date', 'sc', 'bflag' (sc = ['A', 'B', 'Solar Orbiter'], bflag = ['science', 'beacon', ''])
+
+Change first observed by HI1/source of HI Tracks/in situ arrival s/c and times (MES, VEX, Earth, A, B) in elevohi_input.txt -> elevohi, /save_results, /statistics, /silent, /forMovie, bgsw=1, bflag='bflag' -> pick points for DBM Fit -> interrupt execution
+
+fitall_sse_tro(cut=[cut1, cut2], start='start', bflag='bflag', sc='sc') -> save Plot
+
+Change direction of motion of CME apex, phi, ensemble: (phi_min/phi_max/d_phi) with rounded value obtained from fitall_sse_tro +- 10
+
+elevohi, /save_results, /statistics, /silent, /forMovie, bgsw=1, bflag='bflag', single='T/F' -> save Output

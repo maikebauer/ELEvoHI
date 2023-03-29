@@ -32,7 +32,7 @@ def get_hee_coordinates(sc, frametime):
         coord = get_horizons_coord(sc, frametime)
         coord_hee = coord.transform_to(frames.HeliocentricEarthEcliptic)
 
-        for i in range(len(frametime)):
+        for i in range(len(coord)):
             coord_hee_list.append({'lon':coord_hee[i].lon.value*np.pi/180, 'lat':coord_hee[i].lat.value*np.pi/180, 'distance':coord_hee[i].distance.value})
 
     except ValueError:
@@ -85,6 +85,22 @@ def get_time_num(time_str, year, len_time):
 
     return time_num
 
+def time_to_num_cat_new(time_in):
+    # for time conversion from catalogue .sav to numerical time
+    # this for 1-minute data or lower time resolution
+    # for all catalogues
+    # time_in is the time in format: 2007-11-17T07:20:00 or 2007-11-17T07:20Z
+    # for times help see:
+    # http://docs.sunpy.org/en/latest/guide/time.html
+    # http://matplotlib.org/examples/pylab_examples/date_demo2.html
+
+    try:
+        time_num = [mdates.date2num(Time.strptime(time_in[j][0:19], '%Y-%m-%dT%H:%M:%S').datetime) for j in range(len(time_in))]
+    except ValueError:
+        time_num = [mdates.date2num(Time.strptime(time_in[j], '%Y-%m-%dT%H:%MZ').datetime) for j in range(len(time_in))]
+
+    return np.array(time_num), np.array(time_str)
+
 def time_to_num_cat(time_in):
     # for time conversion from catalogue .sav to numerical time
     # this for 1-minute data or lower time resolution
@@ -116,7 +132,6 @@ def time_to_num_cat(time_in):
     # to an array
     return time_num, np.array(time_str)
 
-
 def roundTime(dt=None, roundTo=60):
     # Round a datetime object to any time lapse in seconds
     # dt : datetime.datetime object, default now.
@@ -130,19 +145,19 @@ def roundTime(dt=None, roundTo=60):
     return dt + datetime.timedelta(0, rounding - seconds, -dt.microsecond)
 
 
-def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
+def plot_ellipse(ax, dayjump, cmeind, k, all_apex_f, all_apex_w,
                  all_apex_r, all_apex_lon, all_apex_s, all_apex_flag,
                  frame_time_num, et_time_num_interp, et_elon_interp,
-                 et_time_num, startcutFit, endcutFit, constraint):
+                 et_time_num, startcutFit, endcutFit, constraint, sc_pos):
     # Plot all the different ellipses (different runs for each time step) with
     # the elongation profile
-
+    
     slope = np.NaN
     intercept = np.NaN
     # ############################## plot all active CME ellipses
     if np.size(cmeind) > 0:
         for p in range(0, np.size(cmeind)):
-
+        
             # print('CME active ',p)
 
             # derive values for ellipse
@@ -223,7 +238,13 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                     # cmeind[0][p]]/50),
                     # lw=1.5)
                     ax.plot(longell, rell, c='red', alpha=0.1, lw=1.5)
-
+                    
+                if all_apex_s[cmeind[0][p]] == 'Solar_Orbiter':
+                    ax.plot(longell, rell, c='green', alpha=0.1, lw=1.5)
+         
+                if all_apex_s[cmeind[0][p]] == 'PSP':
+                    ax.plot(longell, rell, c='black', alpha=0.1, lw=1.5)
+                    
                 if all_apex_s[cmeind[0][p]] == 'B':
                     # ax.plot(longell,rell, c='royalblue', alpha=1-abs(
                     # all_apex_lat[cmeind[0][p]]/50), lw=1.5)
@@ -254,6 +275,12 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                     # cmeind[0][p]]/50),
                     # lw=1.5)
                     ax.plot(longell, rell, c='gray', alpha=0.1, lw=1.5)
+                    
+                if all_apex_s[cmeind[0][p]] == 'Solar_Orbiter':
+                    ax.plot(longell, rell, c='gray', alpha=0.1, lw=1.5)
+ 
+                if all_apex_s[cmeind[0][p]] == 'PSP':
+                    ax.plot(longell, rell, c='black', alpha=0.1, lw=1.5)
 
                 if all_apex_s[cmeind[0][p]] == 'B':
                     # ax.plot(longell,rell, c='royalblue', alpha=1-abs(
@@ -269,7 +296,7 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                         # lw=1,zorder=2)
 
                     if all_apex_flag[cmeind[0][p]] == 1:
-                        # ax.plot(longell,rell, c='silver', alpha=0.6, lw=1,
+                        # ax.plot(longell,rell, c='silver', a lpha=0.6, lw=1,
                         # zorder=1)
                         ax.plot(
                             longell, rell, c='gray', alpha=0.1, lw=1, zorder=1)
@@ -302,12 +329,12 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                 # elongation profile
                 # this is the currently active epsilon for the active CME
                 angletox = np.deg2rad(180 - et_elon_interp[elonind[0]] - abs(
-                    np.rad2deg(pos.stb[1, timeind])))  # +np.pi/2
+                    np.rad2deg(sc_pos['lon'])))  # +np.pi/2
                 # make x y coordinates of tangent vector from 0/0
                 vecx1 = tangent_size * np.cos(angletox)
                 vecy1 = tangent_size * np.sin(angletox)
-                stx = pos.stb[0, timeind] * np.cos(pos.stb[1, timeind])
-                sty = pos.stb[0, timeind] * np.sin(pos.stb[1, timeind])
+                stx = sc_pos['distance'] * np.cos(sc_pos['lon'])
+                sty = sc_pos['distance'] * np.sin(sc_pos['lon'])
                 elonx1 = stx + vecx1
                 elony1 = sty + vecy1
                 if sty > 0:
@@ -318,21 +345,21 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                 if (frame_time_num + k > et_time_num[startcutFit] and
                         frame_time_num + k < et_time_num[endcutFit]):
                     ax.plot(
-                        [pos.stb[1, timeind], elonlong],
-                        [pos.stb[0, timeind], elonr], c='navy', alpha=1, lw=1)
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='navy', alpha=1, lw=1)
                 else:
                     ax.plot(
-                        [pos.stb[1, timeind], elonlong],
-                        [pos.stb[0, timeind], elonr], c='navy', alpha=1,
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='navy', alpha=1,
                         lw=1, ls='--')
             if all_apex_s[cmeind[0][p]] == 'A':
 
                 # Original
                 angletox = np.deg2rad(90 - et_elon_interp[elonind[0]] - abs(
-                    np.rad2deg(pos.sta[1, timeind])))
+                    np.rad2deg(sc_pos['lon'])))
 
-                stx = pos.sta[0, timeind] * np.cos(pos.sta[1, timeind])
-                sty = pos.sta[0, timeind] * np.sin(pos.sta[1, timeind])
+                stx = sc_pos['distance'] * np.cos(sc_pos['lon'])
+                sty = sc_pos['distance'] * np.sin(sc_pos['lon'])
                 vecx1 = np.sin(angletox) * tangent_size
                 vecy1 = np.cos(angletox) * tangent_size
                 elonx1 = stx - vecx1
@@ -347,16 +374,88 @@ def plot_ellipse(ax, dayjump, pos, timeind, cmeind, k, all_apex_f, all_apex_w,
                     frame_time_num + k < et_time_num[endcutFit]):
 
                     ax.plot(
-                        [pos.sta[1, timeind], elonlong],
-                        [pos.sta[0, timeind], elonr], c='darkred',
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='darkred',
                         alpha=1, lw=1)
 
                 else:
                     ax.plot(
-                        [pos.sta[1, timeind], elonlong],
-                        [pos.sta[0, timeind], elonr], c='darkred', alpha=1,
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='darkred', alpha=1,
                         lw=1, ls='--')
 
+            if all_apex_s[cmeind[0][p]] == 'Solar_Orbiter':
+
+                # Original
+                angletox = np.deg2rad(90 - et_elon_interp[elonind[0]] - abs(
+                    np.rad2deg(sc_pos['lon'])))
+
+                stx = sc_pos['distance'] * np.cos(sc_pos['lon'])
+                sty = sc_pos['distance'] * np.sin(sc_pos['lon'])
+                vecx1 = np.sin(angletox) * tangent_size
+                vecy1 = np.cos(angletox) * tangent_size
+                elonx1 = stx - vecx1
+                elony1 = sty - vecy1
+                if sty < 0:
+                    elony1 = sty + vecy1
+
+                elonr = np.sqrt(elonx1 ** 2 + elony1 ** 2)
+                elonlong = np.arctan2(elony1, elonx1)
+
+                if (frame_time_num + k > et_time_num[startcutFit] and
+                    frame_time_num + k < et_time_num[endcutFit]):
+
+                    ax.plot(
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='green',
+                        alpha=1, lw=1)
+
+                else:
+                    ax.plot(
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='green', alpha=1,
+                        lw=1, ls='--')                    
+
+            if all_apex_s[cmeind[0][p]] == 'PSP':
+
+                # Original
+                angletox = np.deg2rad(90 + et_elon_interp[elonind[0]] - abs(
+                    np.rad2deg(sc_pos['lon'])))
+                #x and y component of spacecraft orbit position (HEE)
+                stx = sc_pos['distance'] * np.cos(sc_pos['lon'])
+                sty = sc_pos['distance'] * np.sin(sc_pos['lon'])
+                #x and y component of tangent vector
+                vecx1 = np.sin(angletox) * tangent_size
+                vecy1 = np.cos(angletox) * tangent_size
+                elonx1 = stx - vecx1
+                elony1 = sty - vecy1
+                if sty < 0:
+                    elony1 = sty + vecy1
+
+                elonr = np.sqrt(elonx1 ** 2 + elony1 ** 2)
+                elonlong = np.arctan2(elony1, elonx1)
+
+                if (frame_time_num + k > et_time_num[startcutFit] and
+                    frame_time_num + k < et_time_num[endcutFit]):
+
+                    ax.plot(
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='black',
+                        alpha=1, lw=1)
+
+                else:
+                    ax.plot(
+                        [sc_pos['lon'], elonlong],
+                        [sc_pos['distance'], elonr], c='black', alpha=1,
+                        lw=1, ls='--')    
+                    
+                #print('et_elon_interp[elonind[0]]', et_elon_interp[elonind[0]])
+                #print('sc_pos[distance]:', sc_pos['distance'])
+                #print('sc_pos[lon]:', sc_pos['lon'])                    
+                #print('elonlong:', elonlong)
+                #print('elonr:', elonr)
+                
+                #sys.exit()
             slope = (elony1 - sty) / (elonx1 - stx)
             intercept = sty - slope * stx
 
@@ -411,13 +510,22 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
 
         dur_days = d_days
         if cme_start_date_time == '':
-            CME_start_time = mdates.date2num(roundTime(Time.strptime(
-                all_apex_t_num_non_interp_str[0], '%Y-%m-%dT%H:%M:%S').datetime,
-                roundTo=60 * 60))  # -1/24.
-            # define cme frame times
-            h_time_num = np.arange(
-                CME_start_time, CME_start_time + d_days, dayjump)
-
+            
+            try:
+                CME_start_time = mdates.date2num(roundTime(Time.strptime(
+                    all_apex_t_num_non_interp_str[0], '%Y-%m-%dT%H:%MZ').datetime,
+                    roundTo=60 * 60))  # -1/24.
+                # define cme frame times
+                h_time_num = np.arange(
+                    CME_start_time, CME_start_time + d_days, dayjump)
+            except ValueError:
+                CME_start_time = mdates.date2num(roundTime(Time.strptime(
+                    all_apex_t_num_non_interp_str[0][0:19], '%Y-%m-%dT%H:%M:%S').datetime,
+                    roundTo=60 * 60))  # -1/24.
+                # define cme frame times
+                h_time_num = np.arange(
+                    CME_start_time, CME_start_time + d_days, dayjump)
+                
         # go through each run and interpolate data for each run
         # final array size -> time array of CME frames * run numbers
         finarrs = np.size(h_time_num) * np.size(
@@ -588,7 +696,7 @@ def read_CME_data(read_data, dayjump, current_event_dir, ensemble_results,
 def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
          catPath=None, scriptPath=None, outPath=None, plotBGSW=None,
          showMag=None, ffmpegPath=None, bflag=None):
-
+    
     if catPath is None:
         catPath = 'cats/'
     if showMag is None:
@@ -601,7 +709,14 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
         spacecraft = 'A'
     if spaceCraft == 'B':
         spacecraft = 'B'
+    if spaceCraft.lower() == 'solar_orbiter' or spaceCraft.lower() == 'solar orbiter' or spaceCraft.lower() == 'solo':
+        spacecraft = 'Solar_Orbiter'
+    if spaceCraft.lower() == 'solar_orbiter_a' or spaceCraft.lower() == 'a_solar_orbiter':
+        spacecraft = 'A_Solar_Orbiter'
+    if spaceCraft == 'PSP':
+        spacecraft = 'PSP'   
     plotSolarWind = True
+    
     if plotBGSW is None or not plotBGSW:
         plotSolarWind = False
     if ffmpegPath is None:
@@ -626,6 +741,7 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
             read_data = 0
 
         # how much time is between frames in days
+        #change this for higher time resolution
         dayjump = np.double(1 / 24.0)
 
         # how long the movie takes in days
@@ -703,7 +819,8 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
         vexind = np.where(sc == 'VEX')
         staind = np.where(sc == 'STEREO-A')
         winind = np.where(sc == 'Wind')
-
+        soloind = np.where(sc == 'Solar Orbiter') #212
+        
         # make time conversion for all icme_start_time variables
         # save it as string
         icme_start_time_str = i.icmecat['icme_start_time']
@@ -715,13 +832,9 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
         active_icme_vex = np.zeros(np.size(icme_start_time_num))
         active_icme_sta = np.zeros(np.size(icme_start_time_num))
         active_icme_win = np.zeros(np.size(icme_start_time_num))
+        active_icme_solo = np.zeros(np.size(icme_start_time_num))
 
-        # ####get spacecraft and planet positions
-        pos = getcat(catPath + 'positions_2007_2023_' + coordSysString +
-                     '_6hours.sav')
-        pos_time_num = time_to_num_cat(pos.time)[0]
-
-        if spacecraft == 'AB' or spacecraft == 'A':
+        if spacecraft == 'AB' or spacecraft == 'A' or spacecraft == 'A_Solar_Orbiter':
 
             if bflag != None:
                 current_event_dir_mod = current_event_dir + '_A_' + bflag + '/'
@@ -759,9 +872,42 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                 ensemble_results, duration_days, cme_start_date_time,
                 ccsds_dir)
 
+        if spacecraft == 'Solar_Orbiter' or spacecraft == 'A_Solar_Orbiter':
+
+            current_event_dir_mod = current_event_dir + '_Solar_Orbiter/'
+
+            ccsds_dir = glob.glob(current_event_dir_mod+'*ccsds*.sav')[0]
+
+            [CME_start_time_solo, duration_days_solo, startcutFit_solo, endcutFit_solo,
+             all_apex_t_solo, all_apex_r_solo, all_apex_lat_solo, all_apex_lon_solo,
+             all_apex_f_solo, all_apex_w_solo, all_apex_s_solo, all_apex_run_solo,
+             all_apex_flag_solo, et_time_num_solo, et_time_num_interp_solo,
+             et_elon_interp_solo] = read_CME_data(
+                read_data, dayjump, current_event_dir_mod,
+                ensemble_results, duration_days, cme_start_date_time,
+                ccsds_dir)
+
+        if spacecraft == 'PSP':
+
+            current_event_dir_mod = current_event_dir + '_PSP/'
+
+            ccsds_dir = glob.glob(current_event_dir_mod+'*ccsds*.sav')[0]
+
+            [CME_start_time_psp, duration_days_psp, startcutFit_psp, endcutFit_psp,
+             all_apex_t_psp, all_apex_r_psp, all_apex_lat_psp, all_apex_lon_psp,
+             all_apex_f_psp, all_apex_w_psp, all_apex_s_psp, all_apex_run_psp,
+             all_apex_flag_psp, et_time_num_psp, et_time_num_interp_psp,
+             et_elon_interp_psp] = read_CME_data(
+                read_data, dayjump, current_event_dir_mod,
+                ensemble_results, duration_days, cme_start_date_time,
+                ccsds_dir)
+            
         if spacecraft == 'AB':
             current_event_dir_mod = current_event_dir + '_AB_' + bflag + '/'
-
+        
+        if spacecraft == 'A_Solar_Orbiter':
+            current_event_dir_mod = current_event_dir + '_A_' + bflag +'_Solar_Orbiter' + '/'
+            
         current_event_dir = current_event_dir_mod
 
         if not os.path.isdir(current_event_dir):
@@ -777,7 +923,16 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
         if spacecraft == 'AB':
             CME_start_time = min(CME_start_time_a, CME_start_time_b)
             duration_days = max(duration_days_a, duration_days_b)
-
+        if spacecraft == 'Solar_Orbiter':
+            CME_start_time = CME_start_time_solo
+            duration_days = duration_days_solo   
+        if spacecraft == 'A_Solar_Orbiter':
+            CME_start_time = min(CME_start_time_a, CME_start_time_solo)
+            duration_days = max(duration_days_a, duration_days_solo)    
+        if spacecraft == 'PSP':
+            CME_start_time = CME_start_time_psp
+            duration_days = duration_days_psp
+            
         shutil.rmtree(current_event_dir + 'frames/')
         os.mkdir(current_event_dir + '/frames')
 
@@ -799,14 +954,14 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
             print(frame_time_num)
 
         time_start, time_end = get_start_end_time(frame_time_num, duration_days, dayjump)
-        frame_time_dict = {'start': time_start, 'stop': time_end, 'step':'1h'}
+        frame_time_dict = {'start': time_start, 'stop': time_end, 'step':'60m'}
 
         psp_coord_hee = get_hee_coordinates('psp', frame_time_dict)
-
+        
         bepi_coord_hee = get_hee_coordinates('bepicolombo', frame_time_dict)
 
         solo_coord_hee = get_hee_coordinates('solo', frame_time_dict)
-
+        
         stereoa_coord_hee = get_hee_coordinates('stereo-a', frame_time_dict)
 
         stereob_coord_hee = get_hee_coordinates('stereo-b', frame_time_dict)
@@ -818,12 +973,13 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
         mars_coord_hee = get_hee_coordinates('499', frame_time_dict) #Mars
 
         mercury_coord_hee = get_hee_coordinates('199', frame_time_dict) #Mercury
-
+        i = 0
+        
         # ##### loop over all movie frames
         for k in np.arange(0, duration_days, dayjump):
 
             #i = int(np.round(k * 1.0 / dayjump))
-            i = 0
+            
             # to current frame time, the days need to be added, so +k is done
             # save frame time as string to write on plot
 
@@ -850,9 +1006,10 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
 
             mercury_coord = mercury_coord_hee[int(i)]
 
+            i = i + 1
             print('frame ', framestr, '  ', frame_time_str)
 
-            if spacecraft == 'AB' or spacecraft == 'A':
+            if spacecraft == 'AB' or spacecraft == 'A' or spacecraft == 'A_Solar_Orbiter':
                 # difference array of current frame time frame_time_num+k to
                 # position time frame_time_num
                 cmedt_a = frame_time_num + k - all_apex_t_a
@@ -870,6 +1027,22 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                 cmeind_b = np.where(np.abs(cmedt_b) < dayjump / 2)
                 # print( 'cmeind', cmeind)
 
+            if spacecraft == 'Solar_Orbiter' or spacecraft == 'A_Solar_Orbiter':
+                cmedt_solo = frame_time_num + k - all_apex_t_solo
+                # get indices where difference is less than half the time
+                # resolution use this to avoid nan in np.where
+                cmedt_solo[np.isnan(cmedt_solo)] = 10000
+                cmeind_solo = np.where(np.abs(cmedt_solo) < dayjump / 2)
+                # print( 'cmeind', cmeind)
+
+            if spacecraft == 'PSP':
+                cmedt_psp = frame_time_num + k - all_apex_t_psp
+                # get indices where difference is less than half the time
+                # resolution use this to avoid nan in np.where
+                cmedt_psp[np.isnan(cmedt_psp)] = 10000
+                cmeind_psp = np.where(np.abs(cmedt_psp) < dayjump / 2)
+                # print( 'cmeind', cmeind)
+                
             # ########################################### make plot
 
             ax = plt.subplot(111, projection='polar')
@@ -893,9 +1066,7 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
 
             # difference array of current frame time frame_time_num+k to
             # position time frame_time_num
-            dct = frame_time_num + k - pos_time_num
             # get index of closest to 0, use this for position
-            timeind = np.argmin(abs(dct))
 
             try:
                 constraint = np.loadtxt(current_event_dir + 'best_indices.csv', delimiter=',')
@@ -903,26 +1074,46 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
             except OSError:
                 constraint = []
 
-            if spacecraft == 'AB' or spacecraft == 'A':
-                [slope_a, intercept_a] = plot_ellipse(ax, dayjump, pos, timeind,
+            if spacecraft == 'AB' or spacecraft == 'A' or spacecraft == 'A_Solar_Orbiter':
+                [slope_a, intercept_a] = plot_ellipse(ax, dayjump,
                                                       cmeind_a, k, all_apex_f_a,
                                                       all_apex_w_a, all_apex_r_a,
                                                       all_apex_lon_a, all_apex_s_a,
                                                       all_apex_flag_a, frame_time_num,
                                                       et_time_num_interp_a,
                                                       et_elon_interp_a, et_time_num_a,
-                                                      startcutFit_a, endcutFit_a, constraint)
+                                                      startcutFit_a, endcutFit_a, constraint, stereoa_coord)
 
             if spacecraft == 'AB' or spacecraft == 'B':
-                [slope_b, intercept_b] = plot_ellipse(ax, dayjump, pos, timeind,
+                [slope_b, intercept_b] = plot_ellipse(ax, dayjump,
                                                       cmeind_b, k, all_apex_f_b,
                                                       all_apex_w_b, all_apex_r_b,
                                                       all_apex_lon_b, all_apex_s_b,
                                                       all_apex_flag_b, frame_time_num,
                                                       et_time_num_interp_b,
                                                       et_elon_interp_b, et_time_num_b,
-                                                      startcutFit_b, endcutFit_b, constraint)
+                                                      startcutFit_b, endcutFit_b, constraint, stereob_coord)
 
+            if spacecraft == 'Solar_Orbiter' or spacecraft == 'A_Solar_Orbiter':
+                [slope_solo, intercept_solo] = plot_ellipse(ax, dayjump,
+                                                      cmeind_solo, k, all_apex_f_solo,
+                                                      all_apex_w_solo, all_apex_r_solo,
+                                                      all_apex_lon_solo, all_apex_s_solo,
+                                                      all_apex_flag_solo, frame_time_num,
+                                                      et_time_num_interp_solo,
+                                                      et_elon_interp_solo, et_time_num_solo,
+                                                      startcutFit_solo, endcutFit_solo, constraint, solo_coord)         
+                
+            if spacecraft == 'PSP':
+                [slope_psp, intercept_psp] = plot_ellipse(ax, dayjump,
+                                                      cmeind_psp, k, all_apex_f_psp,
+                                                      all_apex_w_psp, all_apex_r_psp,
+                                                      all_apex_lon_psp, all_apex_s_psp,
+                                                      all_apex_flag_psp, frame_time_num,
+                                                      et_time_num_interp_psp,
+                                                      et_elon_interp_psp, et_time_num_psp,
+                                                      startcutFit_psp, endcutFit_psp, constraint, psp_coord)    
+                
             if spacecraft == 'AB':
                 if (np.isfinite(slope_a) and np.isfinite(slope_b) and
                         np.isfinite(intercept_a) and np.isfinite(intercept_b)):
@@ -933,8 +1124,8 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                     elonr = np.sqrt(intersect_x ** 2 + intersect_y ** 2)
                     elonlong = np.arctan2(intersect_y, intersect_x)
 
-                    angToA = pos.sta[1, timeind] - elonlong
-                    angToB = abs(pos.stb[1, timeind]) + elonlong
+                    angToA = sc_pos['lon'] - elonlong
+                    angToB = abs(sc_pos['lon']) + elonlong
                     # print('Long of apex: ', np.rad2deg(elonlong))
                     # print('Angle to A: ', np.rad2deg(angToA))
                     # print('Angle to B: ', np.rad2deg(angToB))
@@ -1136,7 +1327,6 @@ def main(eventsList, spaceCraft=None, readData=None, coordSys=None,
                 dpi=300)
             # clears plot window
             plt.clf()
-            i = i+1
         # ########### end of loop
 
         if outPath is None:
