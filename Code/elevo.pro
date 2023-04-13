@@ -195,37 +195,37 @@ f=1/aspectratio
 delta_A = fltarr(n_elements(pos_sta[1, *]))
 
 for i=0,n_elements(pos_sta[1, *])-1 do begin
-  if SIGNUM(direction) EQ SIGNUM(pos_sta[1,i]) then delta_A[i] = direction-pos_sta[1, i]/!dtor
-  if SIGNUM(direction) NE SIGNUM(pos_sta[1,i]) then delta_A[i] = direction-(pos_sta[1, i]/!dtor+360*SIGNUM(direction))
+  if ABS(direction) + ABS(pos_sta[1,i]/!dtor) LT 180 then delta_A[i] = direction-pos_sta[1, i]/!dtor
+  if ABS(direction) + ABS(pos_sta[1,i]/!dtor) GE 180 then delta_A[i] = direction-(pos_sta[1, i]/!dtor+360*SIGNUM(direction))
 endfor
 
 delta_B = fltarr(n_elements(pos_stb[1, *]))
 
 for i=0,n_elements(pos_stb[1, *])-1 do begin
-  if SIGNUM(direction) EQ SIGNUM(pos_stb[1,i]) then delta_B[i] = direction-pos_stb[1, i]/!dtor
-  if SIGNUM(direction) NE SIGNUM(pos_stb[1,i]) then delta_B[i] = direction-(pos_stb[1, i]/!dtor+360*SIGNUM(direction))
+  if ABS(direction) + ABS(pos_stb[1,i]/!dtor) LT 180 then delta_B[i] = direction-pos_stb[1, i]/!dtor
+  if ABS(direction) + ABS(pos_stb[1,i]/!dtor) GE 180 then delta_B[i] = direction-(pos_stb[1, i]/!dtor+360*SIGNUM(direction))
 endfor
 
 delta_V = fltarr(n_elements(pos_vex[1, *]))
 
 for i=0,n_elements(pos_vex[1, *])-1 do begin
-  if SIGNUM(direction) EQ SIGNUM(pos_vex[1,i]) then delta_V[i] = direction-pos_vex[1, i]/!dtor
-  if SIGNUM(direction) NE SIGNUM(pos_vex[1,i]) then delta_V[i] = direction-(pos_vex[1, i]/!dtor+360*SIGNUM(direction))
+  if ABS(direction) + ABS(pos_vex[1,i]/!dtor) LT 180 then delta_V[i] = direction-pos_vex[1, i]/!dtor
+  if ABS(direction) + ABS(pos_vex[1,i]/!dtor) GE 180 then delta_V[i] = direction-(pos_vex[1, i]/!dtor+360*SIGNUM(direction))
 endfor
 
 delta_MES = fltarr(n_elements(pos_mes[1, *]))
 
 for i=0,n_elements(pos_mes[1, *])-1 do begin
-  if SIGNUM(direction) EQ SIGNUM(pos_mes[1,i]) then delta_MES[i] = direction-pos_mes[1, i]/!dtor
-  if SIGNUM(direction) NE SIGNUM(pos_mes[1,i]) then delta_MES[i] = direction-(pos_mes[1, i]/!dtor+360*SIGNUM(direction))
+  if ABS(direction) + ABS(pos_mes[1,i]/!dtor) LT 180 then delta_MES[i] = direction-pos_mes[1, i]/!dtor
+  if ABS(direction) + ABS(pos_mes[1,i]/!dtor) GE 180 then delta_MES[i] = direction-(pos_mes[1, i]/!dtor+360*SIGNUM(direction))
 endfor
 
 if soloAvailable eq 1 then begin
   delta_SOLO = fltarr(n_elements(pos_solo[1, *]))
 
   for i=0,n_elements(pos_solo[1, *])-1 do begin
-  if SIGNUM(direction) EQ SIGNUM(pos_solo[1,i]) then delta_SOLO[i] = direction-pos_solo[1, i]/!dtor
-  if SIGNUM(direction) NE SIGNUM(pos_solo[1,i]) then delta_SOLO[i] = direction-(pos_solo[1, i]/!dtor+360*SIGNUM(direction))
+    if ABS(direction) + ABS(pos_solo[1,i]/!dtor) LT 180 then delta_SOLO[i] = direction-pos_solo[1, i]/!dtor
+    if ABS(direction) + ABS(pos_solo[1,i]/!dtor) GE 180 then delta_SOLO[i] = direction-(pos_solo[1, i]/!dtor+360*SIGNUM(direction))
   endfor
 endif
 
@@ -233,8 +233,8 @@ if pspAvailable eq 1 then begin
   delta_PSP = fltarr(n_elements(pos_psp[1, *]))
 
   for i=0,n_elements(pos_psp[1, *])-1 do begin
-  if SIGNUM(direction) EQ SIGNUM(pos_psp[1,i]) then delta_PSP[i] = direction-pos_psp[1, i]/!dtor
-  if SIGNUM(direction) NE SIGNUM(pos_psp[1,i]) then delta_PSP[i] = direction-(pos_psp[1, i]/!dtor+360*SIGNUM(direction))
+    if ABS(direction) + ABS(pos_psp[1,i]/!dtor) LT 180 then delta_PSP[i] = direction-pos_psp[1, i]/!dtor
+    if ABS(direction) + ABS(pos_psp[1,i]/!dtor) GE 180 then delta_PSP[i] = direction-(pos_psp[1, i]/!dtor+360*SIGNUM(direction))
   endfor
 endif
 
@@ -242,8 +242,8 @@ if bepiAvailable eq 1 then begin
   delta_BEPI = fltarr(n_elements(pos_bepi[1, *]))
 
   for i=0,n_elements(pos_bepi[1, *])-1 do begin
-  if SIGNUM(direction) EQ SIGNUM(pos_bepi[1,i]) then delta_BEPI[i] = direction-pos_bepi[1, i]/!dtor
-  if SIGNUM(direction) NE SIGNUM(pos_bepi[1,i]) then delta_BEPI[i] = direction-(pos_bepi[1, i]/!dtor+360*SIGNUM(direction))
+    if ABS(direction) + ABS(pos_bepi[1,i]/!dtor) LT 180 then delta_BEPI[i] = direction-pos_bepi[1, i]/!dtor
+    if ABS(direction) + ABS(pos_bepi[1,i]/!dtor) GE 180 then delta_BEPI[i] = direction-(pos_bepi[1, i]/!dtor+360*SIGNUM(direction))
   endfor
 endif
 
